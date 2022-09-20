@@ -29,11 +29,11 @@ namespace DualContouring
 
             int idx = 0;
             int resolution = Field.width;
-            for(var x = 0; x < resolution - 1; x++)
+            for(var x = 0; x < resolution; x++)
             {
-                for(var y = 0; y < resolution - 1; y++)
+                for(var y = 0; y < resolution; y++)
                 {
-                    for(var z = 0; z < resolution - 1; z++, idx++)
+                    for(var z = 0; z < resolution; z++, idx++)
                     {
                         var uc = new UnitCube(new Vector3Int(x, y, z), mat);
                         uc.GenerateMesh(Field);
@@ -89,11 +89,12 @@ namespace DualContouring
             //頂点の持つスカラー
             float[] data = new float[8];
 
-            //var resolution = (float)field.width;
-            var resolution = 16f;
+            var resolution = field.width;
+            //var resolution = 16f;
 
             float readField(Vector3Int pos)
             {
+                if (pos.x >= resolution || pos.y >= resolution || pos.z >= resolution) return 0;
                 return field.GetPixel(pos.x, pos.y, pos.z).r;
             }
 
@@ -105,50 +106,16 @@ namespace DualContouring
             data[5] = readField(position + new Vector3Int(1, 1, 0));
             data[6] = readField(position + new Vector3Int(1, 1, 1));
             data[7] = readField(position + new Vector3Int(0, 1, 1));
-            /*
-            var idx = 0;
-            for(int dx = 0; dx < 2; dx++)
-            {
-                for(int dy = 0; dy < 2; dy++)
-                {
-                    for(int dz = 0; dz < 2; dz++, idx ++)
-                    {
-                        var x = position.x + dx;
-                        var y = position.y + dy; 
-                        var z = position.z + dz;
-                        data[idx] = field.GetPixel(x, y, z).r;
-                    }
-                }
-            }
-            */
+            
             var triangles = refLUT(data);
 
-            var indicesCount = triangles.Length;
-            var verticesCount = triangles.Length;
-
-            /*var vertices = new Vector3[verticesCount];
-            for(var i = 0; i < verticesCount; i++)
-            {
-                vertices[i] = vertexPos(triangles[i]);
-            }*/
             var vertices = new Vector3[12];
             for(int i = 0; i < 12; i++)
             {
                 vertices[i] = vertexPos(i);
             }
-            /*
-            vertices[0] = new Vector3(0, 0, 0) * data[0];
-            vertices[1] = new Vector3(0, 1, 0) * data[0];
-            vertices[2] = new Vector3(0, 0, 1) * data[0];
-            */
-
 
             int[] indices = triangles.Reverse().ToArray();
-            /*
-            triangles[0] = 0;
-            triangles[1] = 1;
-            triangles[2] = 2;
-            */
 
             Mesh mesh = new Mesh();
             mesh.vertices = vertices;
