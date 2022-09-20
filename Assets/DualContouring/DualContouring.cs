@@ -94,8 +94,8 @@ namespace DualContouring
 
             float readField(Vector3Int pos)
             {
-                if (pos.x >= resolution || pos.y >= resolution || pos.z >= resolution) return 0;
-                return field.GetPixel(pos.x, pos.y, pos.z).r;
+                if (pos.x >= resolution || pos.y >= resolution || pos.z >= resolution) return float.MaxValue;
+                return field.GetPixel(pos.x, pos.y, pos.z).r * resolution;
             }
 
             data[0] = readField(position);
@@ -115,7 +115,7 @@ namespace DualContouring
                 vertices[i] = vertexPos(i);
             }
 
-            int[] indices = triangles.Reverse().ToArray();
+            int[] indices = triangles;
 
             Mesh mesh = new Mesh();
             mesh.vertices = vertices;
@@ -128,10 +128,13 @@ namespace DualContouring
         static int[] refLUT(float[] vertexData)
         {
             int LUTidx = 0;
-            float threshold = 0.5f;
+            float threshold = 8f;
             for(int i = 0; i < 8; i++)
             {
-                if (vertexData[i] < threshold) LUTidx |= (int)Mathf.Pow(2, i);
+                if (vertexData[i] < threshold)
+                {
+                    LUTidx |= (int)Mathf.Pow(2, i);
+                }
             }
 
             var triangleList = getTriangles(LUTidx);
@@ -441,5 +444,14 @@ namespace DualContouring
         {0, 9, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
+
+        Vector3 interpolate(Vector3 p0, Vector3 p1, float v0, float v1)
+        {
+            Vector3 mix(Vector3 x, Vector3 y, float a)
+            {
+                return x * (1 - a) + y * a;
+            }
+            return mix(p0, p1, -v0 / (v1 - v0));
+        }
     }
 }

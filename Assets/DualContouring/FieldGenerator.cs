@@ -34,16 +34,8 @@ namespace DualContouring
                 {
                     for(var z = 0; z < resolution; z++, idx++)
                     {
-                        if(new Vector3(x - resolution / 2, y - resolution / 2, z - resolution / 2).magnitude < resolution / 2)
-                        {
-                            //data[idx].r = 1;
-                            Field.SetPixel(x, y, z, new Color(1, 0, 0, 0));
-                        }
-                        else
-                        {
-                            //data[idx].r = 0;
-                            Field.SetPixel(x, y, z, new Color(0, 0, 0, 0));
-                        }
+                        var val = new Vector3(x - resolution / 2, y - resolution / 2, z - resolution / 2).magnitude / resolution;
+                        Field.SetPixel(x, y, z, new Color(val, 0, 0, 0));
                     }
                 }
             }
