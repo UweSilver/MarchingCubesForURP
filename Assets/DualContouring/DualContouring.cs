@@ -73,6 +73,8 @@ namespace DualContouring
         MeshFilter meshFilter;
         MeshRenderer meshRenderer;
 
+        static float threshold = 6f;
+
         public UnitCube(Vector3Int position, Material material)
         {
             this.position = position;
@@ -90,7 +92,6 @@ namespace DualContouring
             float[] data = new float[8];
 
             var resolution = field.width;
-            //var resolution = 16f;
 
             float readField(Vector3Int pos)
             {
@@ -114,7 +115,7 @@ namespace DualContouring
             {
                 var ab = edge2vertex(i);
                 int a = ab.Item1; int b = ab.Item2;
-                vertices[i] = vertexPosition(a, b, Mathf.Abs(data[b] - 8f), Mathf.Abs(data[a] - 8f));
+                vertices[i] = vertexPosition(a, b, Mathf.Abs(data[b] - threshold), Mathf.Abs(data[a] - threshold));
             }
 
             int[] indices = triangles;
@@ -130,7 +131,6 @@ namespace DualContouring
         static int[] refLUT(float[] vertexData)
         {
             int LUTidx = 0;
-            float threshold = 8f;
             for(int i = 0; i < 8; i++)
             {
                 if (vertexData[i] < threshold)
