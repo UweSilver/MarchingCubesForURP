@@ -115,8 +115,6 @@ namespace DualContouring
                 var ab = edge2vertex(i);
                 int a = ab.Item1; int b = ab.Item2;
                 vertices[i] = vertexPosition(a, b, Mathf.Abs(data[b] - 8f), Mathf.Abs(data[a] - 8f));
-                //vertices[i] = vertexPosition(a, b, 1, 1);
-                //vertices[i] = edgeMiddle(i);
             }
 
             int[] indices = triangles;
