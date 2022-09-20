@@ -112,7 +112,11 @@ namespace DualContouring
             var vertices = new Vector3[12];
             for(int i = 0; i < 12; i++)
             {
-                vertices[i] = vertexPos(i);
+                var ab = edge2vertex(i);
+                int a = ab.Item1; int b = ab.Item2;
+                vertices[i] = vertexPosition(a, b, Mathf.Abs(data[b] - 8f), Mathf.Abs(data[a] - 8f));
+                //vertices[i] = vertexPosition(a, b, 1, 1);
+                //vertices[i] = edgeMiddle(i);
             }
 
             int[] indices = triangles;
@@ -154,7 +158,7 @@ namespace DualContouring
             return triangles.ToArray();
         }
 
-        static Vector3 vertexPos(int i)
+        static Vector3 edgeMiddle(int i)
         {
             switch (i)
             {
@@ -185,6 +189,69 @@ namespace DualContouring
             }
 
             throw new System.Exception("vertexPos out of range : " + i);
+        }
+
+        static Vector3 vertexPosition(int a, int b, float aValue, float bValue)
+        {
+            return interpolate(unitCubeVertex(a), unitCubeVertex(b), aValue, bValue);
+        }
+
+        static (int, int) edge2vertex(int edge)
+        {
+            switch (edge)
+            {
+                case 0:
+                    return (0, 1);
+                case 1:
+                    return (1, 2);
+                case 2:
+                    return (2, 3);
+                case 3:
+                    return (3, 0);
+                case 4:
+                    return (4, 5);
+                case 5:
+                    return (5, 6);
+                case 6:
+                    return (6, 7);
+                case 7:
+                    return (7, 4);
+                case 8:
+                    return (0, 4);
+                case 9:
+                    return (1, 5);
+                case 10:
+                    return (2, 6);
+                case 11:
+                    return (3, 7);
+            }
+
+            throw new System.Exception("ERROR : edge2vertex." + edge + "is out of range");
+        }
+
+        static Vector3 unitCubeVertex(int i)
+        {
+            switch (i)
+            {
+                case 0:
+                    return new Vector3(0, 0, 0);
+                case 1:
+                    return new Vector3(1, 0, 0);
+                case 2:
+                    return new Vector3(1, 0, 1);
+                case 3:
+                    return new Vector3(0, 0, 1);
+                case 4:
+                    return new Vector3(0, 1, 0);
+                case 5:
+                    return new Vector3(1, 1, 0);
+                case 6:
+                    return new Vector3(1, 1, 1);
+                case 7:
+                    return new Vector3(0, 1, 1);
+            }
+
+            throw new System.Exception("ERROR : unit Cube Vertex. " + i + "is out of range");
         }
 
         static int[,] triTable = new int[256,16]
@@ -445,13 +512,9 @@ namespace DualContouring
         {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
 
-        Vector3 interpolate(Vector3 p0, Vector3 p1, float v0, float v1)
+        static Vector3 interpolate(Vector3 p0, Vector3 p1, float v0, float v1)
         {
-            Vector3 mix(Vector3 x, Vector3 y, float a)
-            {
-                return x * (1 - a) + y * a;
-            }
-            return mix(p0, p1, -v0 / (v1 - v0));
+            return (p0 * v0 + p1 * v1) / (v0 + v1);
         }
     }
 }
