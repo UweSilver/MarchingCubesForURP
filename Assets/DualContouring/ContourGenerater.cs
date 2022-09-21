@@ -16,11 +16,6 @@ namespace DualContouring
         [SerializeField]
         Material mat;
 
-        private void OnEnable()
-        {
-            
-        }
-
         public void Execute()
         {
             var cpuMC = new CPUMarchingCubes();
