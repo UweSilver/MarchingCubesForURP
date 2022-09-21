@@ -10,7 +10,7 @@ namespace DualContouring
 {
     public class FieldGenerator : MonoBehaviour
     {
-        DualContouring dualContouring;
+        ContourGenerater dualContouring;
 
         Texture3D Field;
 
@@ -73,7 +73,7 @@ namespace DualContouring
 
             //Field.SetPixels(data);
             
-            dualContouring = GetComponent<DualContouring>();
+            dualContouring = GetComponent<ContourGenerater>();
             dualContouring.Field = this.Field;
         }
     }
