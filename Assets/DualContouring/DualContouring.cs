@@ -29,11 +29,11 @@ namespace DualContouring
 
             int idx = 0;
             int resolution = Field.width;
-            for(var x = 0; x < resolution; x++)
+            for(var x = 0; x < resolution - 1; x++)
             {
-                for(var y = 0; y < resolution; y++)
+                for(var y = 0; y < resolution - 1; y++)
                 {
-                    for(var z = 0; z < resolution; z++, idx++)
+                    for(var z = 0; z < resolution - 1; z++, idx++)
                     {
                         var uc = new UnitCube(new Vector3Int(x, y, z), mat);
                         uc.GenerateMesh(Field);
@@ -99,7 +99,7 @@ namespace DualContouring
                 return field.GetPixel(pos.x, pos.y, pos.z).r * resolution;
             }
 
-            data[0] = readField(position);
+            data[0] = readField(position + new Vector3Int(0, 0, 0));
             data[1] = readField(position + new Vector3Int(1, 0, 0));
             data[2] = readField(position + new Vector3Int(1, 0, 1));
             data[3] = readField(position + new Vector3Int(0, 0, 1));
