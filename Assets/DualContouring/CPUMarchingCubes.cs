@@ -1,259 +1,223 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
-
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace DualContouring
 {
-    public class DualContouring : MonoBehaviour
+    public class CPUMarchingCubes : IContourGenerater
     {
-        public Texture3D Field;
-
-        [SerializeField]
-        Material mat;
-
-        private void OnEnable()
+        public void Execute(Texture3D field, Material material) 
         {
-            
-        }
-
-        public void Execute()
-        {
-            Debug.Log("DC execute");
+            Debug.Log("CPUMarchingCubes");
 
             var root = new GameObject();
-
             int idx = 0;
-            int resolution = Field.width;
-            for(var x = 0; x < resolution - 1; x++)
+            int resolution = field.width;
+            for (var x = 0; x < resolution - 1; x++)
             {
-                for(var y = 0; y < resolution - 1; y++)
+                for (var y = 0; y < resolution - 1; y++)
                 {
-                    for(var z = 0; z < resolution - 1; z++, idx++)
+                    for (var z = 0; z < resolution - 1; z++, idx++)
                     {
-                        var uc = new UnitCube(new Vector3Int(x, y, z), mat);
-                        uc.GenerateMesh(Field);
+                        var uc = new UnitCube(new Vector3Int(x, y, z), material);
+                        uc.GenerateMesh(field);
                         uc.gameObject.transform.parent = root.transform;
                     }
                 }
             }
         }
-    }
-
-
-#if UNITY_EDITOR
-    [CustomEditor(typeof(DualContouring))]
-    public class DualContouringEditor : Editor
-    {
-        public override void OnInspectorGUI()
+        class UnitCube
         {
-            base.OnInspectorGUI();
+            // = 8つの頂点のうち、最も原点(0, 0, 0)に近い頂点
+            Vector3Int position;
 
-            if (GUILayout.Button("Execute"))
+            Material material;
+
+            public GameObject gameObject;
+            MeshFilter meshFilter;
+            MeshRenderer meshRenderer;
+
+            static float threshold = 6f;
+
+            public UnitCube(Vector3Int position, Material material)
             {
-                var dc = target as DualContouring;
-                dc.Execute();
-            }
-        }
-    }
-#endif
+                this.position = position;
+                this.material = material;
 
-    class UnitCube
-    {
-        // = 8つの頂点のうち、最も原点(0, 0, 0)に近い頂点
-        Vector3Int position;
-
-        Material material;
-
-        public GameObject gameObject;
-        MeshFilter meshFilter;
-        MeshRenderer meshRenderer;
-
-        static float threshold = 6f;
-
-        public UnitCube(Vector3Int position, Material material)
-        {
-            this.position = position;
-            this.material = material;
-
-            gameObject = new GameObject();
-            meshFilter = gameObject.AddComponent<MeshFilter>();
-            meshRenderer = gameObject.AddComponent<MeshRenderer>();
-            gameObject.transform.position = position;
-        }
-
-        public void GenerateMesh(Texture3D field)
-        {
-            //頂点の持つスカラー
-            float[] data = new float[8];
-
-            var resolution = field.width;
-
-            float readField(Vector3Int pos)
-            {
-                if (pos.x >= resolution || pos.y >= resolution || pos.z >= resolution) return float.MaxValue;
-                return field.GetPixel(pos.x, pos.y, pos.z).r * resolution;
+                gameObject = new GameObject();
+                meshFilter = gameObject.AddComponent<MeshFilter>();
+                meshRenderer = gameObject.AddComponent<MeshRenderer>();
+                gameObject.transform.position = position;
             }
 
-            data[0] = readField(position + new Vector3Int(0, 0, 0));
-            data[1] = readField(position + new Vector3Int(1, 0, 0));
-            data[2] = readField(position + new Vector3Int(1, 0, 1));
-            data[3] = readField(position + new Vector3Int(0, 0, 1));
-            data[4] = readField(position + new Vector3Int(0, 1, 0));
-            data[5] = readField(position + new Vector3Int(1, 1, 0));
-            data[6] = readField(position + new Vector3Int(1, 1, 1));
-            data[7] = readField(position + new Vector3Int(0, 1, 1));
-            
-            var triangles = refLUT(data);
-
-            var vertices = new Vector3[12];
-            for(int i = 0; i < 12; i++)
+            public void GenerateMesh(Texture3D field)
             {
-                var ab = edge2vertex(i);
-                int a = ab.Item1; int b = ab.Item2;
-                vertices[i] = vertexPosition(a, b, Mathf.Abs(data[b] - threshold), Mathf.Abs(data[a] - threshold));
-            }
+                //頂点の持つスカラー
+                float[] data = new float[8];
 
-            int[] indices = triangles;
+                var resolution = field.width;
 
-            Mesh mesh = new Mesh();
-            mesh.vertices = vertices;
-            mesh.triangles = indices;
-
-            meshFilter.mesh = mesh;
-            meshRenderer.material = material;
-        }
-
-        static int[] refLUT(float[] vertexData)
-        {
-            int LUTidx = 0;
-            for(int i = 0; i < 8; i++)
-            {
-                if (vertexData[i] < threshold)
+                float readField(Vector3Int pos)
                 {
-                    LUTidx |= (int)Mathf.Pow(2, i);
+                    if (pos.x >= resolution || pos.y >= resolution || pos.z >= resolution) return float.MaxValue;
+                    return field.GetPixel(pos.x, pos.y, pos.z).r * resolution;
                 }
+
+                data[0] = readField(position + new Vector3Int(0, 0, 0));
+                data[1] = readField(position + new Vector3Int(1, 0, 0));
+                data[2] = readField(position + new Vector3Int(1, 0, 1));
+                data[3] = readField(position + new Vector3Int(0, 0, 1));
+                data[4] = readField(position + new Vector3Int(0, 1, 0));
+                data[5] = readField(position + new Vector3Int(1, 1, 0));
+                data[6] = readField(position + new Vector3Int(1, 1, 1));
+                data[7] = readField(position + new Vector3Int(0, 1, 1));
+
+                var triangles = refLUT(data);
+
+                var vertices = new Vector3[12];
+                for (int i = 0; i < 12; i++)
+                {
+                    var ab = edge2vertex(i);
+                    int a = ab.Item1; int b = ab.Item2;
+                    vertices[i] = vertexPosition(a, b, Mathf.Abs(data[b] - threshold), Mathf.Abs(data[a] - threshold));
+                }
+
+                int[] indices = triangles;
+
+                Mesh mesh = new Mesh();
+                mesh.vertices = vertices;
+                mesh.triangles = indices;
+
+                meshFilter.mesh = mesh;
+                meshRenderer.material = material;
             }
 
-            var triangleList = getTriangles(LUTidx);
-            return triangleList;
-        }
-
-        static int[] getTriangles(int index)
-        {
-            List<int> triangles = new();
-            for(int i = 0; i < 16; i++)
+            static int[] refLUT(float[] vertexData)
             {
-                var rawVal = triTable[index, i];
-                if (rawVal != -1)
-                    triangles.Add(triTable[index, i]);
-                else break;
-            }
-            return triangles.ToArray();
-        }
+                int LUTidx = 0;
+                for (int i = 0; i < 8; i++)
+                {
+                    if (vertexData[i] < threshold)
+                    {
+                        LUTidx |= (int)Mathf.Pow(2, i);
+                    }
+                }
 
-        static Vector3 edgeMiddle(int i)
-        {
-            switch (i)
+                var triangleList = getTriangles(LUTidx);
+                return triangleList;
+            }
+
+            static int[] getTriangles(int index)
             {
-                case 0:
-                    return new Vector3(0.5f, 0, 0);
-                case 1:
-                    return new Vector3(1, 0, 0.5f);
-                case 2:
-                    return new Vector3(0.5f, 0, 1);
-                case 3:
-                    return new Vector3(0, 0, 0.5f);
-                case 4:
-                    return new Vector3(0.5f, 1, 0);
-                case 5:
-                    return new Vector3(1, 1, 0.5f);
-                case 6:
-                    return new Vector3(0.5f, 1, 1);
-                case 7:
-                    return new Vector3(0, 1, 0.5f);
-                case 8:
-                    return new Vector3(0, 0.5f, 0);
-                case 9:
-                    return new Vector3(1, 0.5f, 0);
-                case 10:
-                    return new Vector3(1, 0.5f, 1);
-                case 11:
-                    return new Vector3(0, 0.5f, 1);
+                List<int> triangles = new();
+                for (int i = 0; i < 16; i++)
+                {
+                    var rawVal = triTable[index, i];
+                    if (rawVal != -1)
+                        triangles.Add(triTable[index, i]);
+                    else break;
+                }
+                return triangles.ToArray();
             }
 
-            throw new System.Exception("vertexPos out of range : " + i);
-        }
-
-        static Vector3 vertexPosition(int a, int b, float aValue, float bValue)
-        {
-            return interpolate(unitCubeVertex(a), unitCubeVertex(b), aValue, bValue);
-        }
-
-        static (int, int) edge2vertex(int edge)
-        {
-            switch (edge)
+            static Vector3 edgeMiddle(int i)
             {
-                case 0:
-                    return (0, 1);
-                case 1:
-                    return (1, 2);
-                case 2:
-                    return (2, 3);
-                case 3:
-                    return (3, 0);
-                case 4:
-                    return (4, 5);
-                case 5:
-                    return (5, 6);
-                case 6:
-                    return (6, 7);
-                case 7:
-                    return (7, 4);
-                case 8:
-                    return (0, 4);
-                case 9:
-                    return (1, 5);
-                case 10:
-                    return (2, 6);
-                case 11:
-                    return (3, 7);
+                switch (i)
+                {
+                    case 0:
+                        return new Vector3(0.5f, 0, 0);
+                    case 1:
+                        return new Vector3(1, 0, 0.5f);
+                    case 2:
+                        return new Vector3(0.5f, 0, 1);
+                    case 3:
+                        return new Vector3(0, 0, 0.5f);
+                    case 4:
+                        return new Vector3(0.5f, 1, 0);
+                    case 5:
+                        return new Vector3(1, 1, 0.5f);
+                    case 6:
+                        return new Vector3(0.5f, 1, 1);
+                    case 7:
+                        return new Vector3(0, 1, 0.5f);
+                    case 8:
+                        return new Vector3(0, 0.5f, 0);
+                    case 9:
+                        return new Vector3(1, 0.5f, 0);
+                    case 10:
+                        return new Vector3(1, 0.5f, 1);
+                    case 11:
+                        return new Vector3(0, 0.5f, 1);
+                }
+
+                throw new System.Exception("vertexPos out of range : " + i);
             }
 
-            throw new System.Exception("ERROR : edge2vertex." + edge + "is out of range");
-        }
-
-        static Vector3 unitCubeVertex(int i)
-        {
-            switch (i)
+            static Vector3 vertexPosition(int a, int b, float aValue, float bValue)
             {
-                case 0:
-                    return new Vector3(0, 0, 0);
-                case 1:
-                    return new Vector3(1, 0, 0);
-                case 2:
-                    return new Vector3(1, 0, 1);
-                case 3:
-                    return new Vector3(0, 0, 1);
-                case 4:
-                    return new Vector3(0, 1, 0);
-                case 5:
-                    return new Vector3(1, 1, 0);
-                case 6:
-                    return new Vector3(1, 1, 1);
-                case 7:
-                    return new Vector3(0, 1, 1);
+                return interpolate(unitCubeVertex(a), unitCubeVertex(b), aValue, bValue);
             }
 
-            throw new System.Exception("ERROR : unit Cube Vertex. " + i + "is out of range");
-        }
+            static (int, int) edge2vertex(int edge)
+            {
+                switch (edge)
+                {
+                    case 0:
+                        return (0, 1);
+                    case 1:
+                        return (1, 2);
+                    case 2:
+                        return (2, 3);
+                    case 3:
+                        return (3, 0);
+                    case 4:
+                        return (4, 5);
+                    case 5:
+                        return (5, 6);
+                    case 6:
+                        return (6, 7);
+                    case 7:
+                        return (7, 4);
+                    case 8:
+                        return (0, 4);
+                    case 9:
+                        return (1, 5);
+                    case 10:
+                        return (2, 6);
+                    case 11:
+                        return (3, 7);
+                }
 
-        static int[,] triTable = new int[256,16]
-        {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+                throw new System.Exception("ERROR : edge2vertex." + edge + "is out of range");
+            }
+
+            static Vector3 unitCubeVertex(int i)
+            {
+                switch (i)
+                {
+                    case 0:
+                        return new Vector3(0, 0, 0);
+                    case 1:
+                        return new Vector3(1, 0, 0);
+                    case 2:
+                        return new Vector3(1, 0, 1);
+                    case 3:
+                        return new Vector3(0, 0, 1);
+                    case 4:
+                        return new Vector3(0, 1, 0);
+                    case 5:
+                        return new Vector3(1, 1, 0);
+                    case 6:
+                        return new Vector3(1, 1, 1);
+                    case 7:
+                        return new Vector3(0, 1, 1);
+                }
+
+                throw new System.Exception("ERROR : unit Cube Vertex. " + i + "is out of range");
+            }
+
+            static int[,] triTable = new int[256, 16]
+            {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {1, 8, 3, 9, 8, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
@@ -510,9 +474,10 @@ namespace DualContouring
         {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
         {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
 
-        static Vector3 interpolate(Vector3 p0, Vector3 p1, float v0, float v1)
-        {
-            return (p0 * v0 + p1 * v1) / (v0 + v1);
+            static Vector3 interpolate(Vector3 p0, Vector3 p1, float v0, float v1)
+            {
+                return (p0 * v0 + p1 * v1) / (v0 + v1);
+            }
         }
     }
 }
