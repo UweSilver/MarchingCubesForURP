@@ -12,16 +12,18 @@ namespace DualContouring
 
             var root = new GameObject();
             int idx = 0;
-            int resolution = field.width;
+            int resolution = 100;
             for (var x = 0; x < resolution - 1; x++)
             {
                 for (var y = 0; y < resolution - 1; y++)
                 {
                     for (var z = 0; z < resolution - 1; z++, idx++)
                     {
-                        var uc = new UnitCube(new Vector3Int(x, y, z), material);
+                        var uc = new UnitCube(new Vector3(x, y, z) / resolution, material, resolution);
                         uc.GenerateMesh(field);
                         uc.gameObject.transform.parent = root.transform;
+
+                        uc.gameObject.transform.position = new Vector3(x, y, z);
                     }
                 }
             }
@@ -29,25 +31,28 @@ namespace DualContouring
         class UnitCube
         {
             // = 8つの頂点のうち、最も原点(0, 0, 0)に近い頂点
-            Vector3Int position;
+            Vector3 position;
 
             Material material;
+
+            float resolution;
 
             public GameObject gameObject;
             MeshFilter meshFilter;
             MeshRenderer meshRenderer;
 
-            static float threshold = 6f;
+            static float threshold = 4f;
 
-            public UnitCube(Vector3Int position, Material material)
+            public UnitCube(Vector3 position, Material material, int resolution)
             {
                 this.position = position;
                 this.material = material;
 
+                this.resolution = resolution;
+
                 gameObject = new GameObject();
                 meshFilter = gameObject.AddComponent<MeshFilter>();
                 meshRenderer = gameObject.AddComponent<MeshRenderer>();
-                gameObject.transform.position = position;
             }
 
             public void GenerateMesh(Texture3D field)
@@ -55,22 +60,19 @@ namespace DualContouring
                 //頂点の持つスカラー
                 float[] data = new float[8];
 
-                var resolution = field.width;
-
-                float readField(Vector3Int pos)
+                float readField(Vector3 pos)
                 {
-                    if (pos.x >= resolution || pos.y >= resolution || pos.z >= resolution) return float.MaxValue;
-                    return field.GetPixel(pos.x, pos.y, pos.z).r * resolution;
+                    return field.GetPixelBilinear(pos.x, pos.y, pos.z).r * resolution;
                 }
 
-                data[0] = readField(position + new Vector3Int(0, 0, 0));
-                data[1] = readField(position + new Vector3Int(1, 0, 0));
-                data[2] = readField(position + new Vector3Int(1, 0, 1));
-                data[3] = readField(position + new Vector3Int(0, 0, 1));
-                data[4] = readField(position + new Vector3Int(0, 1, 0));
-                data[5] = readField(position + new Vector3Int(1, 1, 0));
-                data[6] = readField(position + new Vector3Int(1, 1, 1));
-                data[7] = readField(position + new Vector3Int(0, 1, 1));
+                data[0] = readField(position + new Vector3(0, 0, 0) / resolution);
+                data[1] = readField(position + new Vector3(1, 0, 0) / resolution);
+                data[2] = readField(position + new Vector3(1, 0, 1) / resolution);
+                data[3] = readField(position + new Vector3(0, 0, 1) / resolution);
+                data[4] = readField(position + new Vector3(0, 1, 0) / resolution);
+                data[5] = readField(position + new Vector3(1, 1, 0) / resolution);
+                data[6] = readField(position + new Vector3(1, 1, 1) / resolution);
+                data[7] = readField(position + new Vector3(0, 1, 1) / resolution);
 
                 var triangles = refLUT(data);
 
