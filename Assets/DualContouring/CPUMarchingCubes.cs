@@ -12,7 +12,7 @@ namespace DualContouring
 
             var root = new GameObject();
             int idx = 0;
-            int resolution = 100;
+            int resolution = 16;
             for (var x = 0; x < resolution - 1; x++)
             {
                 for (var y = 0; y < resolution - 1; y++)
