@@ -41,7 +41,7 @@ namespace DualContouring
             MeshFilter meshFilter;
             MeshRenderer meshRenderer;
 
-            static float threshold = 4f;
+            static float threshold = 0.6f;
 
             public UnitCube(Vector3 position, Material material, int resolution)
             {
@@ -62,7 +62,7 @@ namespace DualContouring
 
                 float readField(Vector3 pos)
                 {
-                    return field.GetPixelBilinear(pos.x, pos.y, pos.z).r * resolution;
+                    return field.GetPixelBilinear(pos.x, pos.y, pos.z).r;
                 }
 
                 data[0] = readField(position + new Vector3(0, 0, 0) / resolution);
@@ -99,12 +99,12 @@ namespace DualContouring
                 int LUTidx = 0;
                 for (int i = 0; i < 8; i++)
                 {
-                    if (vertexData[i] < threshold)
+                    if (vertexData[i] > threshold)
                     {
                         LUTidx |= (int)Mathf.Pow(2, i);
                     }
                 }
-
+                if (LUTidx != 0) Debug.Log("HasPolygon : ");
                 var triangleList = getTriangles(LUTidx);
                 return triangleList;
             }
