@@ -1,0 +1,141 @@
+#pragma kernel CSMain
+
+//
+struct Vertex
+{
+    float3 position;
+    float3 normal;
+};
+
+struct Triangle
+{
+    Vertex v[3];
+};
+
+//input
+sampler3D field;
+RWByteAddressBuffer bufVertices;
+float threshold;
+float3 voxelResolution;
+
+//output
+AppendStructuredBuffer<Triangle> TriangleAppendBuffer;
+
+//LUT
+#include "MarchingCubesLUT.hlsl"
+
+float3 VertexIndex2Position(uint vertexIndex)
+{
+    switch (vertexIndex)
+    {
+        case 0:
+            return float3(0, 0, 0);
+        case 1:
+            return float3(1, 0, 0);
+        case 2:
+            return float3(1, 0, 1);
+        case 3:
+            return float3(0, 0, 1);
+        case 4:
+            return float3(0, 1, 0);
+        case 5:
+            return float3(1, 1, 0);
+        case 6:
+            return float3(1, 1, 1);
+        case 7:
+            return float3(0, 1, 1);
+    }
+    return float3(-1, -1, -1);
+}
+
+float3 uvw(float3 position, uint vertexIndex)
+{
+    return (position + VertexIndex2Position(vertexIndex)) / voxelResolution;
+}
+
+float ReadField(float3 uvw)
+{
+    return tex3D(field, uvw).r;
+}
+
+int GetLUTIndex(float vertexData[8])
+{
+    uint LUTidx = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        if (vertexData[i] > threshold)
+        {
+            LUTidx |= asuint(pow(2, i));
+        }
+    }
+    
+    return LUTidx;
+}
+
+float3 VertexInterpolate(int p0Idx, int p1Idx, float val0, float val1)
+{
+    float3 p0 = VertexIndex2Position(p0Idx);
+    float3 p1 = VertexIndex2Position(p1Idx);
+    return (p0 * val0 + p1 * val1) / (val0 + val1);
+}
+
+[numthreads(1, 1, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    float3 position = id;
+    
+    float vertexData[8];
+    for (uint i = 0; i < 8; i++)
+    {
+        vertexData[i] = ReadField(uvw(position, i));
+    }
+    
+    int LUTIdx = GetLUTIndex(vertexData);
+    
+    float3 vertList[12];
+    if (edgeTable[LUTIdx] != 0)
+    {
+        if (edgeTable[LUTIdx] & 1)
+            vertList[0] = VertexInterpolate(0, 1, vertexData[0], vertexData[1]);
+        if(edgeTable[LUTIdx] & 2)
+            vertList[1] = VertexInterpolate(1, 2, vertexData[1], vertexData[2]);
+        if (edgeTable[LUTIdx] & 4)
+            vertList[1] = VertexInterpolate(2, 3, vertexData[2], vertexData[3]);
+        if (edgeTable[LUTIdx] & 8)
+            vertList[1] = VertexInterpolate(3, 0, vertexData[3], vertexData[0]);
+        if (edgeTable[LUTIdx] & 16)
+            vertList[1] = VertexInterpolate(4, 5, vertexData[4], vertexData[5]);
+        if (edgeTable[LUTIdx] & 32)
+            vertList[1] = VertexInterpolate(5, 6, vertexData[5], vertexData[6]);
+        if (edgeTable[LUTIdx] & 64)
+            vertList[1] = VertexInterpolate(6, 7, vertexData[6], vertexData[7]);
+        if (edgeTable[LUTIdx] & 128)
+            vertList[1] = VertexInterpolate(7, 4, vertexData[7], vertexData[4]);
+        if (edgeTable[LUTIdx] & 256)
+            vertList[1] = VertexInterpolate(0, 4, vertexData[0], vertexData[4]);
+        if (edgeTable[LUTIdx] & 512)
+            vertList[1] = VertexInterpolate(1, 5, vertexData[1], vertexData[5]);
+        if (edgeTable[LUTIdx] & 1024)
+            vertList[1] = VertexInterpolate(2, 6, vertexData[2], vertexData[6]);
+        if (edgeTable[LUTIdx] & 2048)
+            vertList[1] = VertexInterpolate(3, 7, vertexData[3], vertexData[7]);
+        
+        for (int i = 0; triTable[LUTIdx][i] != -1; i += 3)
+        {
+            Triangle t;
+            
+            for (int j = 0; j < 3; j++)
+            {
+                Vertex v;
+                v.position = vertList[triTable[LUTIdx][i + j]];
+                
+                t.v[j] = v;
+            }
+            
+            TriangleAppendBuffer.Append(t);
+        }
+
+    }
+    
+    //int EdgeIntersections[16] = triLUT[];
+}
