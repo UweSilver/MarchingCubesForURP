@@ -1,7 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-
+using UnityEngine.Rendering;
+using Unity.Collections;
 using System.IO;
 
 namespace DualContouring
@@ -16,7 +17,13 @@ namespace DualContouring
         Vector3Int voxelResolution;
         float threshold;
 
-        GPUMarchingCubes()
+        //mesh obj
+        GameObject root;
+        MeshRenderer meshRenderer;
+        MeshFilter meshFilter;
+        Mesh mesh;
+
+        public GPUMarchingCubes()
         {
             marchingCubes = (ComputeShader)Resources.Load("MarchingCubes");
             MCKernel = marchingCubes.FindKernel("CSMain");
@@ -24,10 +31,21 @@ namespace DualContouring
             marchingCubes.SetInts("voxelResolution", new int[] { voxelResolution.x, voxelResolution.y, voxelResolution.z});
             marchingCubes.SetFloat("threshold", threshold);
 
-            gpuVertices = new GraphicsBuffer(GraphicsBuffer.Target.Append, (voxelResolution.x - 1) * (voxelResolution.y - 1) * (voxelResolution.z - 1) * 5, sizeof(float) * 18);
+            root = new GameObject();
+            meshRenderer = root.AddComponent<MeshRenderer>();
+            meshFilter = root.AddComponent<MeshFilter>();
+
+            mesh = new Mesh();
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.vertexBufferTarget |= GraphicsBuffer.Target.Append;
+
+            var vertices = new NativeArray<Vector3>((voxelResolution.x - 1) * (voxelResolution.y - 1) * (voxelResolution.z - 1) * sizeof(float) * 18, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            mesh.SetVertices(vertices);
+
+            gpuVertices = mesh.GetVertexBuffer(0);
         }
 
-        void IContourGenerater.Execute(Texture3D field, Material material)
+        public void Execute(Texture3D field, Material material)
         {
             Debug.Log("GPUMarchingCubes");
 
@@ -37,7 +55,7 @@ namespace DualContouring
 
             marchingCubes.Dispatch(MCKernel, voxelResolution.x, voxelResolution.y, voxelResolution.z);
 
-            var root = new GameObject();
+            meshRenderer.material = material;
         }
     }
 }

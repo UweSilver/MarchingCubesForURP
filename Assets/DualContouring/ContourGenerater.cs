@@ -18,8 +18,11 @@ namespace DualContouring
 
         public void Execute()
         {
-            var cpuMC = new CPUMarchingCubes();
-            cpuMC.Execute(Field, mat);
+            //var cpuMC = new CPUMarchingCubes();
+            //cpuMC.Execute(Field, mat);
+
+            var gpuMC = new CPUMarchingCubes();
+            gpuMC.Execute(Field, mat);
         }
     }
 

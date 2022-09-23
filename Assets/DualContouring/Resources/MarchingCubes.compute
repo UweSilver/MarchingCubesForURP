@@ -132,10 +132,14 @@ void CSMain (uint3 id : SV_DispatchThreadID)
                 t.v[j] = v;
             }
             
-            TriangleAppendBuffer.Append(t);
+            //TriangleAppendBuffer.Append(t);
         }
 
     }
     
-    //int EdgeIntersections[16] = triLUT[];
+    Triangle t;
+    t.v[0].position = float3(0, 0, 0);
+    t.v[1].position = float3(0, 1, 0);
+    t.v[2].position = float3(0, 0, 1);
+    TriangleAppendBuffer.Append(t);
 }
