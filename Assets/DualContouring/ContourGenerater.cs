@@ -13,16 +13,25 @@ namespace DualContouring
     {
         public Texture3D Field;
 
+        enum ContouringType
+        {
+            CPUMC,GPUMC,
+        }
+        [SerializeField]
+        ContouringType contouringType;
+
         [SerializeField]
         Material mat;
 
         public void Execute()
         {
-            //var cpuMC = new CPUMarchingCubes();
-            //cpuMC.Execute(Field, mat);
-
-            var gpuMC = new CPUMarchingCubes();
-            gpuMC.Execute(Field, mat);
+            IContourGenerater cg = contouringType switch
+            {
+                ContouringType.CPUMC => new CPUMarchingCubes(),
+                ContouringType.GPUMC => new GPUMarchingCubes(),
+                _=> throw new System.Exception("contouring type is not valid")
+            };
+            cg?.Execute(Field, mat);
         }
     }
 

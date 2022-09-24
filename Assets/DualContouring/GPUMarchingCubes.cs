@@ -43,9 +43,11 @@ namespace DualContouring
             mesh.SetVertices(vertices);
 
             gpuVertices = mesh.GetVertexBuffer(0);
+
+            meshFilter.mesh = new Mesh();
         }
 
-        public void Execute(Texture3D field, Material material)
+        void IContourGenerater.Execute(Texture3D field, Material material)
         {
             Debug.Log("GPUMarchingCubes");
 

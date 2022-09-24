@@ -6,7 +6,7 @@ namespace DualContouring
 {
     public class CPUMarchingCubes : IContourGenerater
     {
-        public void Execute(Texture3D field, Material material) 
+        void IContourGenerater.Execute(Texture3D field, Material material) 
         {
             Debug.Log("CPUMarchingCubes");
 
