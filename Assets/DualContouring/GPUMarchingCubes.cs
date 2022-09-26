@@ -53,7 +53,7 @@ namespace DualContouring
             normals[1] = new Vector3(0, 0, 0);
             normals[2] = new Vector3(0, 0, 0);
 
-            var indices = new int[3] { 0, 1, 2 };
+            var indices = new int[6] { 0, 1, 2, 0, 0, 0};
 
             mesh.SetVertices(vertices);
             //mesh.SetNormals(normals);

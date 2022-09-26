@@ -150,4 +150,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     IdxBuffer.Store(0, asuint(int(0)));
     IdxBuffer.Store(4 * 1, asuint(int(1)));
     IdxBuffer.Store(4 * 2, asuint(int(2)));
+    IdxBuffer.Store(4 * 3, asuint(int(2)));
+    IdxBuffer.Store(4 * 4, asuint(int(3)));
+    IdxBuffer.Store(4 * 5, asuint(int(0)));
 }
