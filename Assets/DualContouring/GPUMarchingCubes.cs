@@ -13,6 +13,7 @@ namespace DualContouring
         int MCKernel;
 
         GraphicsBuffer gpuVertices;
+        GraphicsBuffer gpuIndices;
 
         Vector3Int voxelResolution = new Vector3Int(10, 10, 10);
         float threshold = 0.5f;
@@ -39,8 +40,9 @@ namespace DualContouring
             mesh = new Mesh();
             mesh.indexFormat = IndexFormat.UInt32;
             mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+            mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
 
-            var vertices = new NativeArray<Vector3>(3, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            var vertices = new NativeArray<Vector3>(9, Allocator.Persistent, NativeArrayOptions.ClearMemory);
             var normals = new NativeArray<Vector3>(3, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
             vertices[0] = new Vector3(0, 0, 0);
@@ -61,6 +63,7 @@ namespace DualContouring
             mesh.triangles = indices;
 
             gpuVertices = mesh.GetVertexBuffer(0);
+            gpuIndices = mesh.GetIndexBuffer();
 
             meshFilter.mesh = mesh;
         }
@@ -74,6 +77,7 @@ namespace DualContouring
             marchingCubes.SetTexture(MCKernel, "field", field);
 
             marchingCubes.SetBuffer(0, "VertBuffer", gpuVertices);
+            marchingCubes.SetBuffer(0, "IdxBuffer", gpuIndices);
 
             //marchingCubes.Dispatch(MCKernel, voxelResolution.x, voxelResolution.y, voxelResolution.z);
 

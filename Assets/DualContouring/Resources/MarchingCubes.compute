@@ -19,6 +19,7 @@ float3 voxelResolution;
 
 //output
 RWByteAddressBuffer VertBuffer;
+RWByteAddressBuffer IdxBuffer;
 
 //LUT
 #include "MarchingCubesLUT.hlsl"
@@ -83,7 +84,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 {
     float3 position = id;
     
-    /*float vertexData[8];
+    float vertexData[8];
     for (uint i = 0; i < 8; i++)
     {
         vertexData[i] = ReadField(uvw(position, i));
@@ -136,17 +137,17 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
     }
     
-    Triangle t;
-    t.v[0].position = float3(1, 0, 0);
-    t.v[1].position = float3(2, 1, 0);
-    t.v[2].position = float3(3, 0, 1);*/
-    //TriangleAppendBuffer.Append(t);
-    
     //TriangleAppendBuffer.Append(float3(0, 0, 0));
     //TriangleAppendBuffer.Append(float3(0, 1, 0));
     //TriangleAppendBuffer.Append(float3(0, 0, 1));
     
-    VertBuffer.Store3(0, asuint(float3(0.5, 0, -0.5)));
-    VertBuffer.Store3(12, asuint(float3(0, 1, 0)));
-    VertBuffer.Store3(24, asuint(float3(0, 0, 1.5)));
+    VertBuffer.Store3(0, asuint(float3(0, 0, 0)));
+    VertBuffer.Store3(4 * 3 * 1, asuint(float3(0, 1, 0)));
+    VertBuffer.Store3(4 * 3 * 2, asuint(float3(0, 0, 1)));
+    VertBuffer.Store3(4 * 3 * 3, asuint(float3(0, 2, 0)));
+    VertBuffer.Store3(4 * 3 * 4, asuint(float3(0, 0, 2)));
+    
+    IdxBuffer.Store(0, asuint(int(0)));
+    IdxBuffer.Store(4 * 1, asuint(int(1)));
+    IdxBuffer.Store(4 * 2, asuint(int(2)));
 }
