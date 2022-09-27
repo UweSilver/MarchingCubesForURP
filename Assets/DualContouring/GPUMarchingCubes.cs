@@ -15,7 +15,7 @@ namespace DualContouring
         GraphicsBuffer gpuVertices;
         GraphicsBuffer gpuIndices;
 
-        Vector3Int voxelResolution = new Vector3Int(2, 3, 4);
+        Vector3Int voxelResolution = new Vector3Int(10, 10, 10);
         float threshold = 0.5f;
 
         //mesh obj
@@ -43,8 +43,10 @@ namespace DualContouring
             mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
 
             var voxelCount = voxelResolution.x * voxelResolution.y * voxelResolution.z;
-            var maxVertexCount = voxelCount * 5; //1つのvoxel内の最大の頂点数は5
-            var maxIndexCount = voxelCount * 3 * 3; //最大の頂点数5->最大のポリゴン数は3->最大のindex数3x3
+            var maxVertexCount = voxelCount * 12; 
+            //1つのvoxel内の最大の頂点数は5だが、indexが0-11の12個
+            //hlslにappendできるlistみたいなデータ構造を見つけたら利用される最大の頂点数の5個に減らせる
+            var maxIndexCount = voxelCount * 3 * 3; //最大のポリゴン数は3->最大のindex数3x3
 
             var vertices = new NativeArray<Vector3>(maxVertexCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 

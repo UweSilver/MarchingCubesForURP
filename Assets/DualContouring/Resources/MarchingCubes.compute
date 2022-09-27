@@ -138,21 +138,11 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
     }
     
-    //VertBuffer.Store3(0, asuint(float3(0, 0, 0)));
-    //VertBuffer.Store3(idx * 36 + 0, asuint(float3(0, 0, 0) + position));
-    //VertBuffer.Store3(idx * 36 + 12, asuint(float3(0, 1, 0) + position));
-    //VertBuffer.Store3(idx * 36 + 24, asuint(float3(0, 0, 1) + position));
-    
-    //IdxBuffer.Store(idx * 12 + 0, asuint(idx * 3 + 0));
-    //IdxBuffer.Store(idx * 12 + 4, asuint(idx * 3 + 1));
-    //IdxBuffer.Store(idx * 12 + 8, asuint(idx * 3 + 2));
-    
-    
-    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 0, asuint(float3(0, 0, 0) + position));
-    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 1, asuint(float3(0, 1, 0) + position));
-    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 2, asuint(float3(0, 0, 1) + position));
-    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 3, asuint(float3(0, 0.5, 0) + position));
-    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 4, asuint(float3(0, 0, 0.5) + position));
+    VertBuffer.Store3(idx * 5 * 4 * 3 + 4 * 3 * 0, asuint(float3(0, 0, 0) + position));
+    VertBuffer.Store3(idx * 5 * 4 * 3 + 4 * 3 * 1, asuint(float3(0, 1, 0) + position));
+    VertBuffer.Store3(idx * 5 * 4 * 3 + 4 * 3 * 2, asuint(float3(0, 0, 1) + position));
+    VertBuffer.Store3(idx * 5 * 4 * 3 + 4 * 3 * 3, asuint(float3(0, 0.5, 0) + position));
+    VertBuffer.Store3(idx * 5 * 4 * 3 + 4 * 3 * 4, asuint(float3(0, 0, 0.5) + position));
     
     IdxBuffer.Store((idx * 9 + 0) * 4, asuint((idx * 5 + 0)));
     IdxBuffer.Store((idx * 9 + 1) * 4, asuint((idx * 5 + 1)));
