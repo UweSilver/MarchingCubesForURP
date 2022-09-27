@@ -82,7 +82,8 @@ float3 VertexInterpolate(int p0Idx, int p1Idx, float val0, float val1)
 [numthreads(1, 1, 1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
-    float3 position = id;
+    float3 position = float3(id.x, id.y, id.z);
+    int idx = ((id.z) * voxelResolution.x * voxelResolution.y) + ((id.y) * voxelResolution.x) + id.x;
     
     float vertexData[8];
     for (uint i = 0; i < 8; i++)
@@ -137,20 +138,30 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
     }
     
-    //TriangleAppendBuffer.Append(float3(0, 0, 0));
-    //TriangleAppendBuffer.Append(float3(0, 1, 0));
-    //TriangleAppendBuffer.Append(float3(0, 0, 1));
+    //VertBuffer.Store3(0, asuint(float3(0, 0, 0)));
+    //VertBuffer.Store3(idx * 36 + 0, asuint(float3(0, 0, 0) + position));
+    //VertBuffer.Store3(idx * 36 + 12, asuint(float3(0, 1, 0) + position));
+    //VertBuffer.Store3(idx * 36 + 24, asuint(float3(0, 0, 1) + position));
     
-    VertBuffer.Store3(0, asuint(float3(0, 0, 0)));
-    VertBuffer.Store3(4 * 3 * 1, asuint(float3(0, 1, 0)));
-    VertBuffer.Store3(4 * 3 * 2, asuint(float3(0, 0, 1)));
-    VertBuffer.Store3(4 * 3 * 3, asuint(float3(0, 2, 0)));
-    VertBuffer.Store3(4 * 3 * 4, asuint(float3(0, 0, 2)));
+    //IdxBuffer.Store(idx * 12 + 0, asuint(idx * 3 + 0));
+    //IdxBuffer.Store(idx * 12 + 4, asuint(idx * 3 + 1));
+    //IdxBuffer.Store(idx * 12 + 8, asuint(idx * 3 + 2));
     
-    IdxBuffer.Store(0, asuint(int(0)));
-    IdxBuffer.Store(4 * 1, asuint(int(1)));
-    IdxBuffer.Store(4 * 2, asuint(int(2)));
-    IdxBuffer.Store(4 * 3, asuint(int(2)));
-    IdxBuffer.Store(4 * 4, asuint(int(3)));
-    IdxBuffer.Store(4 * 5, asuint(int(0)));
+    
+    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 0, asuint(float3(0, 0, 0) + position));
+    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 1, asuint(float3(0, 1, 0) + position));
+    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 2, asuint(float3(0, 0, 1) + position));
+    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 3, asuint(float3(0, 0.5, 0) + position));
+    VertBuffer.Store3(idx * 5 * 12 + 4 * 3 * 4, asuint(float3(0, 0, 0.5) + position));
+    
+    IdxBuffer.Store((idx * 9 + 0) * 4, asuint((idx * 5 + 0)));
+    IdxBuffer.Store((idx * 9 + 1) * 4, asuint((idx * 5 + 1)));
+    IdxBuffer.Store((idx * 9 + 2) * 4, asuint((idx * 5 + 2)));
+    IdxBuffer.Store((idx * 9 + 3) * 4, asuint((idx * 5 + 0)));
+    IdxBuffer.Store((idx * 9 + 4) * 4, asuint((idx * 5 + 0)));
+    IdxBuffer.Store((idx * 9 + 5) * 4, asuint((idx * 5 + 0)));
+    IdxBuffer.Store((idx * 9 + 6) * 4, asuint((idx * 5 + 0)));
+    IdxBuffer.Store((idx * 9 + 7) * 4, asuint((idx * 5 + 0)));
+    IdxBuffer.Store((idx * 9 + 8) * 4, asuint((idx * 5 + 0)));
+    
 }

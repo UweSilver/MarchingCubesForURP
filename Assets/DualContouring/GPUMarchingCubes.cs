@@ -15,7 +15,7 @@ namespace DualContouring
         GraphicsBuffer gpuVertices;
         GraphicsBuffer gpuIndices;
 
-        Vector3Int voxelResolution = new Vector3Int(10, 10, 10);
+        Vector3Int voxelResolution = new Vector3Int(2, 3, 4);
         float threshold = 0.5f;
 
         //mesh obj
@@ -42,23 +42,16 @@ namespace DualContouring
             mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
             mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
 
-            var vertices = new NativeArray<Vector3>(9, Allocator.Persistent, NativeArrayOptions.ClearMemory);
-            var normals = new NativeArray<Vector3>(3, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            var voxelCount = voxelResolution.x * voxelResolution.y * voxelResolution.z;
+            var maxVertexCount = voxelCount * 5; //1Ç¬ÇÃvoxelì‡ÇÃç≈ëÂÇÃí∏ì_êîÇÕ5
+            var maxIndexCount = voxelCount * 3 * 3; //ç≈ëÂÇÃí∏ì_êî5->ç≈ëÂÇÃÉ|ÉäÉSÉìêîÇÕ3->ç≈ëÂÇÃindexêî3x3
 
-            vertices[0] = new Vector3(0, 0, 0);
-            vertices[1] = new Vector3(0, 0, 0);
-            vertices[2] = new Vector3(0, 0, 0);
+            var vertices = new NativeArray<Vector3>(maxVertexCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 
-            normals[0] = new Vector3(0, 0, 0);
-            normals[1] = new Vector3(0, 0, 0);
-            normals[2] = new Vector3(0, 0, 0);
-
-            var indices = new int[6] { 0, 1, 2, 0, 0, 0};
+            var indices = new int[maxIndexCount];
 
             mesh.SetVertices(vertices);
-            //mesh.SetNormals(normals);
             vertices.Dispose();
-            normals.Dispose();
 
             mesh.triangles = indices;
 
@@ -70,18 +63,19 @@ namespace DualContouring
 
         void IContourGenerater.Execute(Texture3D field, Material material)
         {
-            Debug.Log("GPUMarchingCubes");
+            //Debug.Log("GPUMarchingCubes");
 
             //gpuVertices.SetCounterValue(0);
 
             marchingCubes.SetTexture(MCKernel, "field", field);
+            marchingCubes.SetFloats("voxelResolution", new float[3] { voxelResolution.x, voxelResolution.y, voxelResolution.z });
 
             marchingCubes.SetBuffer(0, "VertBuffer", gpuVertices);
             marchingCubes.SetBuffer(0, "IdxBuffer", gpuIndices);
 
-            //marchingCubes.Dispatch(MCKernel, voxelResolution.x, voxelResolution.y, voxelResolution.z);
+            marchingCubes.Dispatch(MCKernel, voxelResolution.x, voxelResolution.y, voxelResolution.z);
 
-            marchingCubes.Dispatch(MCKernel, 1, 1, 1);
+            //marchingCubes.Dispatch(MCKernel, 1, 1, 1);
 
             meshRenderer.material = material;
         }
