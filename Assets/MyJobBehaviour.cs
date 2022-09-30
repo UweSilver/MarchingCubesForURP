@@ -3,46 +3,61 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Jobs;
 using Unity.Collections;
+using UnityEngine.Jobs;
+using UnityEngine.UI;
 
 public class MyJobBehaviour : MonoBehaviour
 {
-    private int dataNum = 100;
+    [SerializeField]
+    private GameObject prefab;
+    [SerializeField]
+    private int numberToInstantiate = 100;
+    private int total;
+    private TransformAccessArray transforms;
+    private JobHandle jobHandle;
+
+    private void OnDisable()
+    {
+        jobHandle.Complete();
+        transforms.Dispose();
+    }
+
     private void Start()
     {
-        NativeArray<int> a = new NativeArray<int>(dataNum, Allocator.TempJob);
-        NativeArray<int> b = new NativeArray<int>(dataNum, Allocator.TempJob);
-        NativeArray<int> result = new NativeArray<int>(dataNum, Allocator.TempJob);
+        transforms = new TransformAccessArray(0);
+    }
 
-        for(int i = 0; i < dataNum; i++)
+    private void Update()
+    {
+        jobHandle.Complete();
+
+        if (Input.GetMouseButtonDown(0))
         {
-            a[i] = i + 1;
-            b[i] = i + 1;
+            InstantiateGameObject();
         }
 
-        MyJob myJob = new MyJob()
+        var myJob = new MyJob
         {
-            input1 = a,
-            input2 = b,
-            result = result
+            deltaTime = Time.deltaTime,
+            speed = 2f
         };
+        jobHandle = myJob.Schedule(transforms);
+    }
 
-        JobHandle handle = myJob.Schedule(result.Length, 32);
+    void InstantiateGameObject()
+    {
+        jobHandle.Complete();
 
-        handle.Complete();
+        transforms.capacity += numberToInstantiate;
+        Unity.Mathematics.Random rand;
+        rand = new Unity.Mathematics.Random((uint)UnityEngine.Random.Range(1f, 100f));
 
-        int total = 0;
-
-        foreach(var tempResult in result)
+        for(int i = 0; i < numberToInstantiate; i++)
         {
-            total += tempResult;
+            var ins = Instantiate(prefab, new Vector3(rand.NextFloat(-20f, 20f), 50f, 0f), Quaternion.identity);
+            transforms.Add(ins.transform);
         }
-
-        Debug.Log(result[0]);
-        Debug.Log(result[1]);
-        Debug.Log(total);
-
-        a.Dispose();
-        b.Dispose();
-        result.Dispose();
+        total += numberToInstantiate;
+        Debug.Log("totalNum : " + total);
     }
 }
