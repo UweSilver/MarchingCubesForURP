@@ -1,11 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Jobs;
+using Unity.Jobs;
+using Unity.Collections;
 
 namespace DualContouring
 {
     public class CPUMarchingCubes : IContourGenerater
     {
+        private JobHandle jobHandle;
         public void Execute(Texture3D field, Material material) 
         {
             Debug.Log("CPUMarchingCubes");
@@ -13,22 +17,35 @@ namespace DualContouring
             var root = new GameObject();
             int idx = 0;
             int resolution = 16;
+
+            var voxelCount = Mathf.FloorToInt(Mathf.Pow(resolution - 1, 3));
+
+            NativeArray<Vector3Int> unitCubePositions = new NativeArray<Vector3Int>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            
             for (var x = 0; x < resolution - 1; x++)
             {
                 for (var y = 0; y < resolution - 1; y++)
                 {
                     for (var z = 0; z < resolution - 1; z++, idx++)
                     {
-                        var uc = new UnitCube(new Vector3(x, y, z) / resolution, material, resolution);
-                        uc.GenerateMesh(field);
-                        uc.gameObject.transform.parent = root.transform;
-
-                        uc.gameObject.transform.position = new Vector3(x, y, z);
+                        unitCubePositions[idx] = new Vector3Int(x, y, z);
                     }
                 }
             }
+            var mCJob = new MCJob
+            {
+                unitCubePositions = unitCubePositions,
+                voxelResolution = new Vector3Int(resolution, resolution, resolution),
+                field = field,
+                parent = root.transform
+            };
+            jobHandle = mCJob.Schedule(voxelCount, voxelCount);
+
+            jobHandle.Complete();
+            unitCubePositions.Dispose();
         }
-        class UnitCube
+    }
+    class UnitCube
         {
             // = 8つの頂点のうち、最も原点(0, 0, 0)に近い頂点
             Vector3 position;
@@ -43,10 +60,9 @@ namespace DualContouring
 
             static float threshold = 0.6f;
 
-            public UnitCube(Vector3 position, Material material, int resolution)
+            public UnitCube(Vector3 position, int resolution)
             {
                 this.position = position;
-                this.material = material;
 
                 this.resolution = resolution;
 
@@ -480,6 +496,33 @@ namespace DualContouring
             {
                 return (p0 * v0 + p1 * v1) / (v0 + v1);
             }
+        }
+
+    public struct MCJob : IJobParallelFor
+    {
+        [ReadOnly]
+        public NativeArray<Vector3Int> unitCubePositions;
+        [ReadOnly]
+        public Vector3Int voxelResolution;
+        [ReadOnly]
+        public Texture3D field;
+        [ReadOnly]
+        public Transform parent;
+        /*
+        NativeArray<Vector3> vertices;
+        NativeArray<int> indices;
+        */
+
+        public void Execute(int index)
+        {
+            var position = unitCubePositions[index];
+            Debug.Log(position);
+            
+            var uc = new UnitCube(new Vector3(position.x / voxelResolution.x, position.y / voxelResolution.y, position.z / voxelResolution.z), voxelResolution.x);
+            uc.GenerateMesh(field);
+            uc.gameObject.transform.parent = parent;
+            uc.gameObject.transform.position = position;
+            
         }
     }
 }
