@@ -11,7 +11,7 @@ namespace DualContouring
     public class FieldGenerator : MonoBehaviour
     {
 
-        public IVolumeGenerater VolumeGenerater = new VoxelMapToVolume();
+        public IVolumeGenerater VolumeGenerater = new SimpleVolumeGenerater();
         public void Generate()
         {
             //vg = new SimpleVolumeGenerater();
