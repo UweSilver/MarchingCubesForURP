@@ -9,7 +9,7 @@ namespace DualContouring
         ContourGenerater contourGenerater;
         Texture3D field;
 
-        public fieldType Type = fieldType.sin_wave;
+        public fieldType Type = fieldType.double_sphere;
 
         public enum fieldType
         {
