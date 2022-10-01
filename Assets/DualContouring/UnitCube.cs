@@ -64,6 +64,7 @@ namespace DualContouring
                     LUTidx |= (int)Mathf.Pow(2, i);
                 }
             }
+            //if (LUTidx != 0) Debug.Log(position + " : " + unitCubeIdx);
             var triangleList = getTriangles(LUTidx);
             return triangleList;
         }
@@ -76,7 +77,7 @@ namespace DualContouring
                 var rawVal = UnitCubeUtils.triTable[index, i];
                 if (rawVal != -1)
                 {
-                    triangles.Add(rawVal + index * 15);
+                    triangles.Add(rawVal + unitCubeIdx * 12);
                 }
                 else triangles.Add(0);
             }

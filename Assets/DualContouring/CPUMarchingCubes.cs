@@ -12,7 +12,7 @@ namespace DualContouring
 {
     public class CPUMarchingCubes : IContourGenerater
     {
-        int resolution = 16;
+        int resolution = 64;
 
 
         private JobHandle jobHandle;
