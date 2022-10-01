@@ -1,528 +1,288 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Jobs;
 using Unity.Jobs;
 using Unity.Collections;
+using Unity.Burst;
 
 namespace DualContouring
 {
     public class CPUMarchingCubes : IContourGenerater
     {
+        int resolution = 16;
+
+
         private JobHandle jobHandle;
+        
         public void Execute(Texture3D field, Material material) 
         {
             Debug.Log("CPUMarchingCubes");
 
             var root = new GameObject();
-            int idx = 0;
-            int resolution = 16;
+            var meshRenderer = root.AddComponent<MeshRenderer>();
+            meshRenderer.material = material;
+            var meshFilter = root.AddComponent<MeshFilter>();
 
-            var voxelCount = Mathf.FloorToInt(Mathf.Pow(resolution - 1, 3));
+            var mesh = new Mesh();
+            mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+            mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
 
-            NativeArray<Vector3Int> unitCubePositions = new NativeArray<Vector3Int>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            var voxelCount = Mathf.FloorToInt(Mathf.Pow(resolution, 3));
+
+            NativeArray<Vector3Int> unitCubePositions = new NativeArray<Vector3Int>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            NativeArray<VertexVolumeData> vertexVolumeData = new NativeArray<VertexVolumeData>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            NativeArray<UnitCubeVertexArray> vertices = new NativeArray<UnitCubeVertexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            NativeArray<UnitCubeIndexArray> indices = new NativeArray<UnitCubeIndexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
             
-            for (var x = 0; x < resolution - 1; x++)
+            int idx = 0;
+            for (var x = 0; x < resolution; x++)
             {
-                for (var y = 0; y < resolution - 1; y++)
+                for (var y = 0; y < resolution; y++)
                 {
-                    for (var z = 0; z < resolution - 1; z++, idx++)
+                    for (var z = 0; z < resolution; z++, idx++)
                     {
-                        unitCubePositions[idx] = new Vector3Int(x, y, z);
+                        var intPosition = new Vector3Int(x, y, z);
+                        var position = new Vector3(x, y, z);
+                        unitCubePositions[idx] = intPosition;
+
+                        float readField(Vector3 pos)
+                        {
+                            var value = field.GetPixelBilinear(pos.x, pos.y, pos.z, 0).r;
+                            return value;
+                        }
+
+                        var data = new float[8];
+                        data[0] = readField((position + new Vector3(0, 0, 0)) / resolution);
+                        data[1] = readField((position + new Vector3(1, 0, 0)) / resolution);
+                        data[2] = readField((position + new Vector3(1, 0, 1)) / resolution);
+                        data[3] = readField((position + new Vector3(0, 0, 1)) / resolution);
+                        data[4] = readField((position + new Vector3(0, 1, 0)) / resolution);
+                        data[5] = readField((position + new Vector3(1, 1, 0)) / resolution);
+                        data[6] = readField((position + new Vector3(1, 1, 1)) / resolution);
+                        data[7] = readField((position + new Vector3(0, 1, 1)) / resolution);
+                        
+                        var vertexVolume = new VertexVolumeData(data);
+                        vertexVolumeData[idx] = vertexVolume;
                     }
                 }
             }
-            var mCJob = new MCJob
+            var mcJob = new MCJob
             {
-                unitCubePositions = unitCubePositions,
+                unitCubeCoordinate = unitCubePositions,
+                voxelSize = new Vector3(1, 1, 1),
                 voxelResolution = new Vector3Int(resolution, resolution, resolution),
-                field = field,
-                parent = root.transform
+                vertexVolumeData = vertexVolumeData,
+                threshold = 0.5f,
+                vertices = vertices,
+                indices = indices,
             };
-            jobHandle = mCJob.Schedule(voxelCount, voxelCount);
+            jobHandle = mcJob.Schedule(voxelCount, voxelCount);
 
             jobHandle.Complete();
+
+            var verticesVector3 = new NativeArray<Vector3>(voxelCount * 12, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            for(var i = 0; i < vertices.Length; i++)
+            {
+                for(var j = 0; j < 12; j++)
+                {
+                    verticesVector3[i * 12 + j] = vertices[i][j];
+                }
+            }
+
+            var indicesInt = new NativeArray<int>(voxelCount * 15, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            for(var i = 0; i < indices.Length; i++)
+            {
+                for(var j = 0; j < 15; j++)
+                {
+                    indicesInt[i * 15 + j] = indices[i][j];
+                }
+            }
+
+            mesh.SetVertices(verticesVector3);
+            mesh.SetIndices(indicesInt, MeshTopology.Triangles, 0);
+            meshFilter.mesh = mesh;
+            vertexVolumeData.Dispose();
             unitCubePositions.Dispose();
+
+            vertices.Dispose();
+            indices.Dispose();
+            verticesVector3.Dispose();
+            indicesInt.Dispose();
         }
     }
-    class UnitCube
+    
+    public struct VertexVolumeData
+    {
+        float v0, v1, v2, v3, v4, v5, v6, v7;
+        public VertexVolumeData(float[] volumeData)
         {
-            // = 8つの頂点のうち、最も原点(0, 0, 0)に近い頂点
-            Vector3 position;
+            v0 = volumeData[0];
+            v1 = volumeData[1];
+            v2 = volumeData[2];
+            v3 = volumeData[3];
+            v4 = volumeData[4];
+            v5 = volumeData[5];
+            v6 = volumeData[6];
+            v7 = volumeData[7];
+        }
 
-            Material material;
+        public float[] getArray()
+        {
+            var array = new float[8];
+            for (var i = 0; i < 8; i++)
+                array[i] = this[i];
+            return array;
+        }
 
-            float resolution;
-
-            public GameObject gameObject;
-            MeshFilter meshFilter;
-            MeshRenderer meshRenderer;
-
-            static float threshold = 0.6f;
-
-            public UnitCube(Vector3 position, int resolution)
-            {
-                this.position = position;
-
-                this.resolution = resolution;
-
-                gameObject = new GameObject();
-                meshFilter = gameObject.AddComponent<MeshFilter>();
-                meshRenderer = gameObject.AddComponent<MeshRenderer>();
-            }
-
-            public void GenerateMesh(Texture3D field)
-            {
-                //頂点の持つスカラー
-                float[] data = new float[8];
-
-                float readField(Vector3 pos)
+        public float this[int i]
+        {
+            get {
+                return i switch
                 {
-                    return field.GetPixelBilinear(pos.x, pos.y, pos.z).r;
-                }
-
-                data[0] = readField(position + new Vector3(0, 0, 0) / resolution);
-                data[1] = readField(position + new Vector3(1, 0, 0) / resolution);
-                data[2] = readField(position + new Vector3(1, 0, 1) / resolution);
-                data[3] = readField(position + new Vector3(0, 0, 1) / resolution);
-                data[4] = readField(position + new Vector3(0, 1, 0) / resolution);
-                data[5] = readField(position + new Vector3(1, 1, 0) / resolution);
-                data[6] = readField(position + new Vector3(1, 1, 1) / resolution);
-                data[7] = readField(position + new Vector3(0, 1, 1) / resolution);
-
-                var triangles = refLUT(data);
-
-                var vertices = new Vector3[12];
-                for (int i = 0; i < 12; i++)
-                {
-                    var ab = edge2vertex(i);
-                    int a = ab.Item1; int b = ab.Item2;
-                    vertices[i] = vertexPosition(a, b, Mathf.Abs(data[b] - threshold), Mathf.Abs(data[a] - threshold));
-                }
-
-                int[] indices = triangles;
-
-                Mesh mesh = new Mesh();
-                mesh.vertices = vertices;
-                mesh.triangles = indices;
-
-                meshFilter.mesh = mesh;
-                meshRenderer.material = material;
-            }
-
-            static int[] refLUT(float[] vertexData)
-            {
-                int LUTidx = 0;
-                for (int i = 0; i < 8; i++)
-                {
-                    if (vertexData[i] > threshold)
-                    {
-                        LUTidx |= (int)Mathf.Pow(2, i);
-                    }
-                }
-                if (LUTidx != 0) Debug.Log("HasPolygon : ");
-                var triangleList = getTriangles(LUTidx);
-                return triangleList;
-            }
-
-            static int[] getTriangles(int index)
-            {
-                List<int> triangles = new();
-                for (int i = 0; i < 16; i++)
-                {
-                    var rawVal = triTable[index, i];
-                    if (rawVal != -1)
-                        triangles.Add(triTable[index, i]);
-                    else break;
-                }
-                return triangles.ToArray();
-            }
-
-            static Vector3 edgeMiddle(int i)
-            {
-                switch (i)
-                {
-                    case 0:
-                        return new Vector3(0.5f, 0, 0);
-                    case 1:
-                        return new Vector3(1, 0, 0.5f);
-                    case 2:
-                        return new Vector3(0.5f, 0, 1);
-                    case 3:
-                        return new Vector3(0, 0, 0.5f);
-                    case 4:
-                        return new Vector3(0.5f, 1, 0);
-                    case 5:
-                        return new Vector3(1, 1, 0.5f);
-                    case 6:
-                        return new Vector3(0.5f, 1, 1);
-                    case 7:
-                        return new Vector3(0, 1, 0.5f);
-                    case 8:
-                        return new Vector3(0, 0.5f, 0);
-                    case 9:
-                        return new Vector3(1, 0.5f, 0);
-                    case 10:
-                        return new Vector3(1, 0.5f, 1);
-                    case 11:
-                        return new Vector3(0, 0.5f, 1);
-                }
-
-                throw new System.Exception("vertexPos out of range : " + i);
-            }
-
-            static Vector3 vertexPosition(int a, int b, float aValue, float bValue)
-            {
-                return interpolate(unitCubeVertex(a), unitCubeVertex(b), aValue, bValue);
-            }
-
-            static (int, int) edge2vertex(int edge)
-            {
-                switch (edge)
-                {
-                    case 0:
-                        return (0, 1);
-                    case 1:
-                        return (1, 2);
-                    case 2:
-                        return (2, 3);
-                    case 3:
-                        return (3, 0);
-                    case 4:
-                        return (4, 5);
-                    case 5:
-                        return (5, 6);
-                    case 6:
-                        return (6, 7);
-                    case 7:
-                        return (7, 4);
-                    case 8:
-                        return (0, 4);
-                    case 9:
-                        return (1, 5);
-                    case 10:
-                        return (2, 6);
-                    case 11:
-                        return (3, 7);
-                }
-
-                throw new System.Exception("ERROR : edge2vertex." + edge + "is out of range");
-            }
-
-            static Vector3 unitCubeVertex(int i)
-            {
-                switch (i)
-                {
-                    case 0:
-                        return new Vector3(0, 0, 0);
-                    case 1:
-                        return new Vector3(1, 0, 0);
-                    case 2:
-                        return new Vector3(1, 0, 1);
-                    case 3:
-                        return new Vector3(0, 0, 1);
-                    case 4:
-                        return new Vector3(0, 1, 0);
-                    case 5:
-                        return new Vector3(1, 1, 0);
-                    case 6:
-                        return new Vector3(1, 1, 1);
-                    case 7:
-                        return new Vector3(0, 1, 1);
-                }
-
-                throw new System.Exception("ERROR : unit Cube Vertex. " + i + "is out of range");
-            }
-
-            static int[,] triTable = new int[256, 16]
-            {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 8, 3, 9, 8, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 3, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {9, 2, 10, 0, 2, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {2, 8, 3, 2, 10, 8, 10, 9, 8, -1, -1, -1, -1, -1, -1, -1},
-        {3, 11, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 11, 2, 8, 11, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 9, 0, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 11, 2, 1, 9, 11, 9, 8, 11, -1, -1, -1, -1, -1, -1, -1},
-        {3, 10, 1, 11, 10, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 10, 1, 0, 8, 10, 8, 11, 10, -1, -1, -1, -1, -1, -1, -1},
-        {3, 9, 0, 3, 11, 9, 11, 10, 9, -1, -1, -1, -1, -1, -1, -1},
-        {9, 8, 10, 10, 8, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 3, 0, 7, 3, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 1, 9, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 1, 9, 4, 7, 1, 7, 3, 1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 10, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {3, 4, 7, 3, 0, 4, 1, 2, 10, -1, -1, -1, -1, -1, -1, -1},
-        {9, 2, 10, 9, 0, 2, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1},
-        {2, 10, 9, 2, 9, 7, 2, 7, 3, 7, 9, 4, -1, -1, -1, -1},
-        {8, 4, 7, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {11, 4, 7, 11, 2, 4, 2, 0, 4, -1, -1, -1, -1, -1, -1, -1},
-        {9, 0, 1, 8, 4, 7, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1},
-        {4, 7, 11, 9, 4, 11, 9, 11, 2, 9, 2, 1, -1, -1, -1, -1},
-        {3, 10, 1, 3, 11, 10, 7, 8, 4, -1, -1, -1, -1, -1, -1, -1},
-        {1, 11, 10, 1, 4, 11, 1, 0, 4, 7, 11, 4, -1, -1, -1, -1},
-        {4, 7, 8, 9, 0, 11, 9, 11, 10, 11, 0, 3, -1, -1, -1, -1},
-        {4, 7, 11, 4, 11, 9, 9, 11, 10, -1, -1, -1, -1, -1, -1, -1},
-        {9, 5, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {9, 5, 4, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 5, 4, 1, 5, 0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {8, 5, 4, 8, 3, 5, 3, 1, 5, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 10, 9, 5, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {3, 0, 8, 1, 2, 10, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1},
-        {5, 2, 10, 5, 4, 2, 4, 0, 2, -1, -1, -1, -1, -1, -1, -1},
-        {2, 10, 5, 3, 2, 5, 3, 5, 4, 3, 4, 8, -1, -1, -1, -1},
-        {9, 5, 4, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 11, 2, 0, 8, 11, 4, 9, 5, -1, -1, -1, -1, -1, -1, -1},
-        {0, 5, 4, 0, 1, 5, 2, 3, 11, -1, -1, -1, -1, -1, -1, -1},
-        {2, 1, 5, 2, 5, 8, 2, 8, 11, 4, 8, 5, -1, -1, -1, -1},
-        {10, 3, 11, 10, 1, 3, 9, 5, 4, -1, -1, -1, -1, -1, -1, -1},
-        {4, 9, 5, 0, 8, 1, 8, 10, 1, 8, 11, 10, -1, -1, -1, -1},
-        {5, 4, 0, 5, 0, 11, 5, 11, 10, 11, 0, 3, -1, -1, -1, -1},
-        {5, 4, 8, 5, 8, 10, 10, 8, 11, -1, -1, -1, -1, -1, -1, -1},
-        {9, 7, 8, 5, 7, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {9, 3, 0, 9, 5, 3, 5, 7, 3, -1, -1, -1, -1, -1, -1, -1},
-        {0, 7, 8, 0, 1, 7, 1, 5, 7, -1, -1, -1, -1, -1, -1, -1},
-        {1, 5, 3, 3, 5, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {9, 7, 8, 9, 5, 7, 10, 1, 2, -1, -1, -1, -1, -1, -1, -1},
-        {10, 1, 2, 9, 5, 0, 5, 3, 0, 5, 7, 3, -1, -1, -1, -1},
-        {8, 0, 2, 8, 2, 5, 8, 5, 7, 10, 5, 2, -1, -1, -1, -1},
-        {2, 10, 5, 2, 5, 3, 3, 5, 7, -1, -1, -1, -1, -1, -1, -1},
-        {7, 9, 5, 7, 8, 9, 3, 11, 2, -1, -1, -1, -1, -1, -1, -1},
-        {9, 5, 7, 9, 7, 2, 9, 2, 0, 2, 7, 11, -1, -1, -1, -1},
-        {2, 3, 11, 0, 1, 8, 1, 7, 8, 1, 5, 7, -1, -1, -1, -1},
-        {11, 2, 1, 11, 1, 7, 7, 1, 5, -1, -1, -1, -1, -1, -1, -1},
-        {9, 5, 8, 8, 5, 7, 10, 1, 3, 10, 3, 11, -1, -1, -1, -1},
-        {5, 7, 0, 5, 0, 9, 7, 11, 0, 1, 0, 10, 11, 10, 0, -1},
-        {11, 10, 0, 11, 0, 3, 10, 5, 0, 8, 0, 7, 5, 7, 0, -1},
-        {11, 10, 5, 7, 11, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {10, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 3, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {9, 0, 1, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 8, 3, 1, 9, 8, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1},
-        {1, 6, 5, 2, 6, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 6, 5, 1, 2, 6, 3, 0, 8, -1, -1, -1, -1, -1, -1, -1},
-        {9, 6, 5, 9, 0, 6, 0, 2, 6, -1, -1, -1, -1, -1, -1, -1},
-        {5, 9, 8, 5, 8, 2, 5, 2, 6, 3, 2, 8, -1, -1, -1, -1},
-        {2, 3, 11, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {11, 0, 8, 11, 2, 0, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1},
-        {0, 1, 9, 2, 3, 11, 5, 10, 6, -1, -1, -1, -1, -1, -1, -1},
-        {5, 10, 6, 1, 9, 2, 9, 11, 2, 9, 8, 11, -1, -1, -1, -1},
-        {6, 3, 11, 6, 5, 3, 5, 1, 3, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 11, 0, 11, 5, 0, 5, 1, 5, 11, 6, -1, -1, -1, -1},
-        {3, 11, 6, 0, 3, 6, 0, 6, 5, 0, 5, 9, -1, -1, -1, -1},
-        {6, 5, 9, 6, 9, 11, 11, 9, 8, -1, -1, -1, -1, -1, -1, -1},
-        {5, 10, 6, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 3, 0, 4, 7, 3, 6, 5, 10, -1, -1, -1, -1, -1, -1, -1},
-        {1, 9, 0, 5, 10, 6, 8, 4, 7, -1, -1, -1, -1, -1, -1, -1},
-        {10, 6, 5, 1, 9, 7, 1, 7, 3, 7, 9, 4, -1, -1, -1, -1},
-        {6, 1, 2, 6, 5, 1, 4, 7, 8, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 5, 5, 2, 6, 3, 0, 4, 3, 4, 7, -1, -1, -1, -1},
-        {8, 4, 7, 9, 0, 5, 0, 6, 5, 0, 2, 6, -1, -1, -1, -1},
-        {7, 3, 9, 7, 9, 4, 3, 2, 9, 5, 9, 6, 2, 6, 9, -1},
-        {3, 11, 2, 7, 8, 4, 10, 6, 5, -1, -1, -1, -1, -1, -1, -1},
-        {5, 10, 6, 4, 7, 2, 4, 2, 0, 2, 7, 11, -1, -1, -1, -1},
-        {0, 1, 9, 4, 7, 8, 2, 3, 11, 5, 10, 6, -1, -1, -1, -1},
-        {9, 2, 1, 9, 11, 2, 9, 4, 11, 7, 11, 4, 5, 10, 6, -1},
-        {8, 4, 7, 3, 11, 5, 3, 5, 1, 5, 11, 6, -1, -1, -1, -1},
-        {5, 1, 11, 5, 11, 6, 1, 0, 11, 7, 11, 4, 0, 4, 11, -1},
-        {0, 5, 9, 0, 6, 5, 0, 3, 6, 11, 6, 3, 8, 4, 7, -1},
-        {6, 5, 9, 6, 9, 11, 4, 7, 9, 7, 11, 9, -1, -1, -1, -1},
-        {10, 4, 9, 6, 4, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 10, 6, 4, 9, 10, 0, 8, 3, -1, -1, -1, -1, -1, -1, -1},
-        {10, 0, 1, 10, 6, 0, 6, 4, 0, -1, -1, -1, -1, -1, -1, -1},
-        {8, 3, 1, 8, 1, 6, 8, 6, 4, 6, 1, 10, -1, -1, -1, -1},
-        {1, 4, 9, 1, 2, 4, 2, 6, 4, -1, -1, -1, -1, -1, -1, -1},
-        {3, 0, 8, 1, 2, 9, 2, 4, 9, 2, 6, 4, -1, -1, -1, -1},
-        {0, 2, 4, 4, 2, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {8, 3, 2, 8, 2, 4, 4, 2, 6, -1, -1, -1, -1, -1, -1, -1},
-        {10, 4, 9, 10, 6, 4, 11, 2, 3, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 2, 2, 8, 11, 4, 9, 10, 4, 10, 6, -1, -1, -1, -1},
-        {3, 11, 2, 0, 1, 6, 0, 6, 4, 6, 1, 10, -1, -1, -1, -1},
-        {6, 4, 1, 6, 1, 10, 4, 8, 1, 2, 1, 11, 8, 11, 1, -1},
-        {9, 6, 4, 9, 3, 6, 9, 1, 3, 11, 6, 3, -1, -1, -1, -1},
-        {8, 11, 1, 8, 1, 0, 11, 6, 1, 9, 1, 4, 6, 4, 1, -1},
-        {3, 11, 6, 3, 6, 0, 0, 6, 4, -1, -1, -1, -1, -1, -1, -1},
-        {6, 4, 8, 11, 6, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {7, 10, 6, 7, 8, 10, 8, 9, 10, -1, -1, -1, -1, -1, -1, -1},
-        {0, 7, 3, 0, 10, 7, 0, 9, 10, 6, 7, 10, -1, -1, -1, -1},
-        {10, 6, 7, 1, 10, 7, 1, 7, 8, 1, 8, 0, -1, -1, -1, -1},
-        {10, 6, 7, 10, 7, 1, 1, 7, 3, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 6, 1, 6, 8, 1, 8, 9, 8, 6, 7, -1, -1, -1, -1},
-        {2, 6, 9, 2, 9, 1, 6, 7, 9, 0, 9, 3, 7, 3, 9, -1},
-        {7, 8, 0, 7, 0, 6, 6, 0, 2, -1, -1, -1, -1, -1, -1, -1},
-        {7, 3, 2, 6, 7, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {2, 3, 11, 10, 6, 8, 10, 8, 9, 8, 6, 7, -1, -1, -1, -1},
-        {2, 0, 7, 2, 7, 11, 0, 9, 7, 6, 7, 10, 9, 10, 7, -1},
-        {1, 8, 0, 1, 7, 8, 1, 10, 7, 6, 7, 10, 2, 3, 11, -1},
-        {11, 2, 1, 11, 1, 7, 10, 6, 1, 6, 7, 1, -1, -1, -1, -1},
-        {8, 9, 6, 8, 6, 7, 9, 1, 6, 11, 6, 3, 1, 3, 6, -1},
-        {0, 9, 1, 11, 6, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {7, 8, 0, 7, 0, 6, 3, 11, 0, 11, 6, 0, -1, -1, -1, -1},
-        {7, 11, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {7, 6, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {3, 0, 8, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 1, 9, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {8, 1, 9, 8, 3, 1, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1},
-        {10, 1, 2, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 10, 3, 0, 8, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1},
-        {2, 9, 0, 2, 10, 9, 6, 11, 7, -1, -1, -1, -1, -1, -1, -1},
-        {6, 11, 7, 2, 10, 3, 10, 8, 3, 10, 9, 8, -1, -1, -1, -1},
-        {7, 2, 3, 6, 2, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {7, 0, 8, 7, 6, 0, 6, 2, 0, -1, -1, -1, -1, -1, -1, -1},
-        {2, 7, 6, 2, 3, 7, 0, 1, 9, -1, -1, -1, -1, -1, -1, -1},
-        {1, 6, 2, 1, 8, 6, 1, 9, 8, 8, 7, 6, -1, -1, -1, -1},
-        {10, 7, 6, 10, 1, 7, 1, 3, 7, -1, -1, -1, -1, -1, -1, -1},
-        {10, 7, 6, 1, 7, 10, 1, 8, 7, 1, 0, 8, -1, -1, -1, -1},
-        {0, 3, 7, 0, 7, 10, 0, 10, 9, 6, 10, 7, -1, -1, -1, -1},
-        {7, 6, 10, 7, 10, 8, 8, 10, 9, -1, -1, -1, -1, -1, -1, -1},
-        {6, 8, 4, 11, 8, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {3, 6, 11, 3, 0, 6, 0, 4, 6, -1, -1, -1, -1, -1, -1, -1},
-        {8, 6, 11, 8, 4, 6, 9, 0, 1, -1, -1, -1, -1, -1, -1, -1},
-        {9, 4, 6, 9, 6, 3, 9, 3, 1, 11, 3, 6, -1, -1, -1, -1},
-        {6, 8, 4, 6, 11, 8, 2, 10, 1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 10, 3, 0, 11, 0, 6, 11, 0, 4, 6, -1, -1, -1, -1},
-        {4, 11, 8, 4, 6, 11, 0, 2, 9, 2, 10, 9, -1, -1, -1, -1},
-        {10, 9, 3, 10, 3, 2, 9, 4, 3, 11, 3, 6, 4, 6, 3, -1},
-        {8, 2, 3, 8, 4, 2, 4, 6, 2, -1, -1, -1, -1, -1, -1, -1},
-        {0, 4, 2, 4, 6, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 9, 0, 2, 3, 4, 2, 4, 6, 4, 3, 8, -1, -1, -1, -1},
-        {1, 9, 4, 1, 4, 2, 2, 4, 6, -1, -1, -1, -1, -1, -1, -1},
-        {8, 1, 3, 8, 6, 1, 8, 4, 6, 6, 10, 1, -1, -1, -1, -1},
-        {10, 1, 0, 10, 0, 6, 6, 0, 4, -1, -1, -1, -1, -1, -1, -1},
-        {4, 6, 3, 4, 3, 8, 6, 10, 3, 0, 3, 9, 10, 9, 3, -1},
-        {10, 9, 4, 6, 10, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 9, 5, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 3, 4, 9, 5, 11, 7, 6, -1, -1, -1, -1, -1, -1, -1},
-        {5, 0, 1, 5, 4, 0, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1},
-        {11, 7, 6, 8, 3, 4, 3, 5, 4, 3, 1, 5, -1, -1, -1, -1},
-        {9, 5, 4, 10, 1, 2, 7, 6, 11, -1, -1, -1, -1, -1, -1, -1},
-        {6, 11, 7, 1, 2, 10, 0, 8, 3, 4, 9, 5, -1, -1, -1, -1},
-        {7, 6, 11, 5, 4, 10, 4, 2, 10, 4, 0, 2, -1, -1, -1, -1},
-        {3, 4, 8, 3, 5, 4, 3, 2, 5, 10, 5, 2, 11, 7, 6, -1},
-        {7, 2, 3, 7, 6, 2, 5, 4, 9, -1, -1, -1, -1, -1, -1, -1},
-        {9, 5, 4, 0, 8, 6, 0, 6, 2, 6, 8, 7, -1, -1, -1, -1},
-        {3, 6, 2, 3, 7, 6, 1, 5, 0, 5, 4, 0, -1, -1, -1, -1},
-        {6, 2, 8, 6, 8, 7, 2, 1, 8, 4, 8, 5, 1, 5, 8, -1},
-        {9, 5, 4, 10, 1, 6, 1, 7, 6, 1, 3, 7, -1, -1, -1, -1},
-        {1, 6, 10, 1, 7, 6, 1, 0, 7, 8, 7, 0, 9, 5, 4, -1},
-        {4, 0, 10, 4, 10, 5, 0, 3, 10, 6, 10, 7, 3, 7, 10, -1},
-        {7, 6, 10, 7, 10, 8, 5, 4, 10, 4, 8, 10, -1, -1, -1, -1},
-        {6, 9, 5, 6, 11, 9, 11, 8, 9, -1, -1, -1, -1, -1, -1, -1},
-        {3, 6, 11, 0, 6, 3, 0, 5, 6, 0, 9, 5, -1, -1, -1, -1},
-        {0, 11, 8, 0, 5, 11, 0, 1, 5, 5, 6, 11, -1, -1, -1, -1},
-        {6, 11, 3, 6, 3, 5, 5, 3, 1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 10, 9, 5, 11, 9, 11, 8, 11, 5, 6, -1, -1, -1, -1},
-        {0, 11, 3, 0, 6, 11, 0, 9, 6, 5, 6, 9, 1, 2, 10, -1},
-        {11, 8, 5, 11, 5, 6, 8, 0, 5, 10, 5, 2, 0, 2, 5, -1},
-        {6, 11, 3, 6, 3, 5, 2, 10, 3, 10, 5, 3, -1, -1, -1, -1},
-        {5, 8, 9, 5, 2, 8, 5, 6, 2, 3, 8, 2, -1, -1, -1, -1},
-        {9, 5, 6, 9, 6, 0, 0, 6, 2, -1, -1, -1, -1, -1, -1, -1},
-        {1, 5, 8, 1, 8, 0, 5, 6, 8, 3, 8, 2, 6, 2, 8, -1},
-        {1, 5, 6, 2, 1, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 3, 6, 1, 6, 10, 3, 8, 6, 5, 6, 9, 8, 9, 6, -1},
-        {10, 1, 0, 10, 0, 6, 9, 5, 0, 5, 6, 0, -1, -1, -1, -1},
-        {0, 3, 8, 5, 6, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {10, 5, 6, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {11, 5, 10, 7, 5, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {11, 5, 10, 11, 7, 5, 8, 3, 0, -1, -1, -1, -1, -1, -1, -1},
-        {5, 11, 7, 5, 10, 11, 1, 9, 0, -1, -1, -1, -1, -1, -1, -1},
-        {10, 7, 5, 10, 11, 7, 9, 8, 1, 8, 3, 1, -1, -1, -1, -1},
-        {11, 1, 2, 11, 7, 1, 7, 5, 1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 3, 1, 2, 7, 1, 7, 5, 7, 2, 11, -1, -1, -1, -1},
-        {9, 7, 5, 9, 2, 7, 9, 0, 2, 2, 11, 7, -1, -1, -1, -1},
-        {7, 5, 2, 7, 2, 11, 5, 9, 2, 3, 2, 8, 9, 8, 2, -1},
-        {2, 5, 10, 2, 3, 5, 3, 7, 5, -1, -1, -1, -1, -1, -1, -1},
-        {8, 2, 0, 8, 5, 2, 8, 7, 5, 10, 2, 5, -1, -1, -1, -1},
-        {9, 0, 1, 5, 10, 3, 5, 3, 7, 3, 10, 2, -1, -1, -1, -1},
-        {9, 8, 2, 9, 2, 1, 8, 7, 2, 10, 2, 5, 7, 5, 2, -1},
-        {1, 3, 5, 3, 7, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 7, 0, 7, 1, 1, 7, 5, -1, -1, -1, -1, -1, -1, -1},
-        {9, 0, 3, 9, 3, 5, 5, 3, 7, -1, -1, -1, -1, -1, -1, -1},
-        {9, 8, 7, 5, 9, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {5, 8, 4, 5, 10, 8, 10, 11, 8, -1, -1, -1, -1, -1, -1, -1},
-        {5, 0, 4, 5, 11, 0, 5, 10, 11, 11, 3, 0, -1, -1, -1, -1},
-        {0, 1, 9, 8, 4, 10, 8, 10, 11, 10, 4, 5, -1, -1, -1, -1},
-        {10, 11, 4, 10, 4, 5, 11, 3, 4, 9, 4, 1, 3, 1, 4, -1},
-        {2, 5, 1, 2, 8, 5, 2, 11, 8, 4, 5, 8, -1, -1, -1, -1},
-        {0, 4, 11, 0, 11, 3, 4, 5, 11, 2, 11, 1, 5, 1, 11, -1},
-        {0, 2, 5, 0, 5, 9, 2, 11, 5, 4, 5, 8, 11, 8, 5, -1},
-        {9, 4, 5, 2, 11, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {2, 5, 10, 3, 5, 2, 3, 4, 5, 3, 8, 4, -1, -1, -1, -1},
-        {5, 10, 2, 5, 2, 4, 4, 2, 0, -1, -1, -1, -1, -1, -1, -1},
-        {3, 10, 2, 3, 5, 10, 3, 8, 5, 4, 5, 8, 0, 1, 9, -1},
-        {5, 10, 2, 5, 2, 4, 1, 9, 2, 9, 4, 2, -1, -1, -1, -1},
-        {8, 4, 5, 8, 5, 3, 3, 5, 1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 4, 5, 1, 0, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {8, 4, 5, 8, 5, 3, 9, 0, 5, 0, 3, 5, -1, -1, -1, -1},
-        {9, 4, 5, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 11, 7, 4, 9, 11, 9, 10, 11, -1, -1, -1, -1, -1, -1, -1},
-        {0, 8, 3, 4, 9, 7, 9, 11, 7, 9, 10, 11, -1, -1, -1, -1},
-        {1, 10, 11, 1, 11, 4, 1, 4, 0, 7, 4, 11, -1, -1, -1, -1},
-        {3, 1, 4, 3, 4, 8, 1, 10, 4, 7, 4, 11, 10, 11, 4, -1},
-        {4, 11, 7, 9, 11, 4, 9, 2, 11, 9, 1, 2, -1, -1, -1, -1},
-        {9, 7, 4, 9, 11, 7, 9, 1, 11, 2, 11, 1, 0, 8, 3, -1},
-        {11, 7, 4, 11, 4, 2, 2, 4, 0, -1, -1, -1, -1, -1, -1, -1},
-        {11, 7, 4, 11, 4, 2, 8, 3, 4, 3, 2, 4, -1, -1, -1, -1},
-        {2, 9, 10, 2, 7, 9, 2, 3, 7, 7, 4, 9, -1, -1, -1, -1},
-        {9, 10, 7, 9, 7, 4, 10, 2, 7, 8, 7, 0, 2, 0, 7, -1},
-        {3, 7, 10, 3, 10, 2, 7, 4, 10, 1, 10, 0, 4, 0, 10, -1},
-        {1, 10, 2, 8, 7, 4, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 9, 1, 4, 1, 7, 7, 1, 3, -1, -1, -1, -1, -1, -1, -1},
-        {4, 9, 1, 4, 1, 7, 0, 8, 1, 8, 7, 1, -1, -1, -1, -1},
-        {4, 0, 3, 7, 4, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {4, 8, 7, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {9, 10, 8, 10, 11, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {3, 0, 9, 3, 9, 11, 11, 9, 10, -1, -1, -1, -1, -1, -1, -1},
-        {0, 1, 10, 0, 10, 8, 8, 10, 11, -1, -1, -1, -1, -1, -1, -1},
-        {3, 1, 10, 11, 3, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 2, 11, 1, 11, 9, 9, 11, 8, -1, -1, -1, -1, -1, -1, -1},
-        {3, 0, 9, 3, 9, 11, 1, 2, 9, 2, 11, 9, -1, -1, -1, -1},
-        {0, 2, 11, 8, 0, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {3, 2, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {2, 3, 8, 2, 8, 10, 10, 8, 9, -1, -1, -1, -1, -1, -1, -1},
-        {9, 10, 2, 0, 9, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {2, 3, 8, 2, 8, 10, 0, 1, 8, 1, 10, 8, -1, -1, -1, -1},
-        {1, 10, 2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {1, 3, 8, 9, 1, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 9, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
-        {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}};
-
-            static Vector3 interpolate(Vector3 p0, Vector3 p1, float v0, float v1)
-            {
-                return (p0 * v0 + p1 * v1) / (v0 + v1);
+                    0 => v0,
+                    1 => v1,
+                    2 => v2,
+                    3 => v3,
+                    4 => v4,
+                    5 => v5,
+                    6 => v6,
+                    7 => v7,
+                    _ => throw new System.Exception()
+                };
             }
         }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct UnitCubeVertexArray
+    {
+        Vector3 v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11;
+
+        public void set(Vector3[] data)
+        {
+            v0 = data[0];
+            v1 = data[1];
+            v2 = data[2];
+            v3 = data[3];
+            v4 = data[4];
+            v5 = data[5];
+            v6 = data[6];
+            v7 = data[7];
+            v8 = data[8];
+            v9 = data[9];
+            v10 = data[10];
+            v11 = data[11];
+        }
+
+        public Vector3 this[int i]
+        {
+            get
+            {
+                return i switch
+                {
+                    0 => v0,
+                    1 => v1,
+                    2 => v2,
+                    3 => v3,
+                    4 => v4,
+                    5 => v5,
+                    6 => v6,
+                    7 => v7,
+                    8 => v8,
+                    9 => v9,
+                    10 => v10,
+                    11 => v11,
+                    _ => throw new System.Exception()
+                };
+            }
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct UnitCubeIndexArray
+    {
+        int i0, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13, i14;
+
+        public void set(int[] data)
+        {
+            i0 = data[0];
+            i1 = data[1];
+            i2 = data[2];
+            i3 = data[3];
+            i4 = data[4];
+            i5 = data[5];
+            i6 = data[6];
+            i7 = data[7];
+            i8 = data[8];
+            i9 = data[9];
+            i10 = data[10];
+            i11 = data[11];
+            i12 = data[12];
+            i13 = data[13];
+            i14 = data[14];
+        }
+
+        public int this[int i]
+        {
+            get
+            {
+                return i switch
+                {
+                    0 => i0,
+                    1 => i1,
+                    2 => i2,
+                    3 => i3,
+                    4 => i4,
+                    5 => i5,
+                    6 => i6,
+                    7 => i7,
+                    8 => i8,
+                    9 => i9,
+                    10 => i10,
+                    11 => i11,
+                    12 => i12,
+                    13 => i13,
+                    14 => i14,
+                    _ => throw new System.Exception()
+                };
+            }
+        }
+    }
 
     public struct MCJob : IJobParallelFor
     {
         [ReadOnly]
-        public NativeArray<Vector3Int> unitCubePositions;
+        public NativeArray<Vector3Int> unitCubeCoordinate;
+        [ReadOnly]
+        public Vector3 voxelSize;
         [ReadOnly]
         public Vector3Int voxelResolution;
         [ReadOnly]
-        public Texture3D field;
+        public NativeArray<VertexVolumeData> vertexVolumeData;
         [ReadOnly]
-        public Transform parent;
-        /*
-        NativeArray<Vector3> vertices;
-        NativeArray<int> indices;
-        */
+        public float threshold;
+        
+        public NativeArray<UnitCubeVertexArray> vertices;
+        public NativeArray<UnitCubeIndexArray> indices;
+        
 
         public void Execute(int index)
         {
-            var position = unitCubePositions[index];
-            Debug.Log(position);
-            
-            var uc = new UnitCube(new Vector3(position.x / voxelResolution.x, position.y / voxelResolution.y, position.z / voxelResolution.z), voxelResolution.x);
-            uc.GenerateMesh(field);
-            uc.gameObject.transform.parent = parent;
-            uc.gameObject.transform.position = position;
-            
+            var uc = new UnitCube(
+                    index,
+                    unitCubeCoordinate[index],
+                    voxelSize,
+                    voxelResolution,
+                    threshold,
+                    vertexVolumeData[index]
+                );
+            uc.GenerateMesh();
+            vertices[index] = uc.vertices;
+            indices[index] = uc.indices;
         }
     }
 }
