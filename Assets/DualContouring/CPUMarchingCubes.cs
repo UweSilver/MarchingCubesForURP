@@ -130,14 +130,6 @@ namespace DualContouring
             v7 = volumeData[7];
         }
 
-        public float[] getArray()
-        {
-            var array = new float[8];
-            for (var i = 0; i < 8; i++)
-                array[i] = this[i];
-            return array;
-        }
-
         public float this[int i]
         {
             get {
@@ -199,6 +191,25 @@ namespace DualContouring
                     _ => throw new System.Exception()
                 };
             }
+            set
+            {
+                switch (i)
+                {
+                    case 0: v0 = value;break;
+                    case 1: v1 = value;break;
+                    case 2: v2 = value;break;
+                    case 3: v3 = value;break;
+                    case 4: v4 = value;break;
+                    case 5: v5 = value; break;
+                    case 6: v6 = value; break;
+                    case 7: v7 = value; break;
+                    case 8: v8 = value; break;
+                    case 9: v9 = value; break;
+                    case 10: v10 = value; break;
+                    case 11: v11 = value; break;
+                    default: throw new System.Exception();
+                }
+            }
         }
     }
 
@@ -206,6 +217,42 @@ namespace DualContouring
     public struct UnitCubeIndexArray
     {
         int i0, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13, i14;
+
+        public UnitCubeIndexArray(
+            int i0 = 0, 
+            int i1 = 0, 
+            int i2 = 0, 
+            int i3 = 0,
+            int i4 = 0,
+            int i5 = 0,
+            int i6 = 0,
+            int i7 = 0,
+            int i8 = 0,
+            int i9 = 0,
+            int i10 = 0,
+            int i11 = 0,
+            int i12 = 0,
+            int i13 = 0,
+            int i14 = 0,
+            int i15 = 0 //ŽÌ‚Ä‚é
+        )
+        {
+            this.i0 = i0;
+            this.i1 = i1;
+            this.i2 = i2;
+            this.i3 = i3;
+            this.i4 = i4;
+            this.i5 = i5;
+            this.i6 = i6;
+            this.i7 = i7;
+            this.i8 = i8;
+            this.i9 = i9;
+            this.i10 = i10;
+            this.i11 = i11;
+            this.i12 = i12;
+            this.i13 = i13;
+            this.i14 = i14;
+        }
 
         public void set(int[] data)
         {
@@ -250,6 +297,28 @@ namespace DualContouring
                     _ => throw new System.Exception()
                 };
             }
+            set
+            {
+                switch(i)
+                {
+                    case 0: i0 = value; break;
+                    case 1: i1 = value; break;
+                    case 2: i2 = value; break;
+                    case 3: i3 = value; break;
+                    case 4: i4 = value; break;
+                    case 5: i5 = value; break;
+                    case 6: i6 = value; break;
+                    case 7: i7 = value; break;
+                    case 8: i8 = value; break;
+                    case 9: i9 = value; break;
+                    case 10: i10 = value; break;
+                    case 11: i11 = value; break;
+                    case 12: i12 = value; break;
+                    case 13: i13 = value; break;
+                    case 14: i14 = value; break;
+                    default: throw new System.Exception();
+                };
+            }
         }
     }
 
@@ -269,7 +338,6 @@ namespace DualContouring
         public NativeArray<UnitCubeVertexArray> vertices;
         public NativeArray<UnitCubeIndexArray> indices;
         
-
         public void Execute(int index)
         {
             var uc = new UnitCube(
