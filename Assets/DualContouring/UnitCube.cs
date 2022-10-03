@@ -84,7 +84,9 @@ namespace DualContouring
             return triangles;
         }
         
-        public static readonly UnitCubeIndexArray[] triTableIndexArray = new UnitCubeIndexArray[256]
+        //TODO: ‚±‚±‚ð‰½‚Æ‚©‚µ‚È‚¢‚ÆBurstCompile‚ª’Ê‚ç‚È‚¢
+        //readonly array field is not supported...
+       static readonly UnitCubeIndexArray[] triTableIndexArray = new UnitCubeIndexArray[256]
         {
             new UnitCubeIndexArray(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1),
         new UnitCubeIndexArray(0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1),
