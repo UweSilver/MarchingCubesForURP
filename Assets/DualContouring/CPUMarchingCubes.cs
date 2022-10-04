@@ -10,68 +10,60 @@ using Unity.Burst;
 
 namespace DualContouring
 {
-    public class CPUMarchingCubes : IContourGenerater
+    public class CPUMarchingCubes : IContourGenerater, System.IDisposable
     {
         int resolution = 64;
 
 
         private JobHandle jobHandle;
         
-        public void Execute(Texture3D field, Material material) 
+        GameObject root = new();
+        MeshRenderer meshRenderer;
+        MeshFilter meshFilter;
+        Mesh mesh = new();
+
+        int voxelCount;
+
+        NativeArray<Vector3Int> unitCubePositions;
+        NativeArray<VertexVolumeData> vertexVolumeData;
+        NativeArray<UnitCubeVertexArray> vertices;
+        NativeArray<UnitCubeIndexArray> indices;
+        NativeArray<UnitCube> unitCubes;
+
+        NativeArray<Vector3> verticesVector3;
+        NativeArray<int> indicesInt;
+
+        MCJob mcJob;
+
+        public CPUMarchingCubes()
         {
             Debug.Log("CPUMarchingCubes");
 
-            var root = new GameObject();
-            var meshRenderer = root.AddComponent<MeshRenderer>();
-            meshRenderer.material = material;
-            var meshFilter = root.AddComponent<MeshFilter>();
+            meshRenderer = root.AddComponent<MeshRenderer>();
+            meshFilter = root.AddComponent<MeshFilter>();
 
-            var mesh = new Mesh();
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
             mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
             mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
 
-            var voxelCount = Mathf.FloorToInt(Mathf.Pow(resolution, 3));
+            voxelCount = Mathf.FloorToInt(Mathf.Pow(resolution, 3));
 
-            NativeArray<Vector3Int> unitCubePositions = new NativeArray<Vector3Int>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            NativeArray<VertexVolumeData> vertexVolumeData = new NativeArray<VertexVolumeData>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            NativeArray<UnitCubeVertexArray> vertices = new NativeArray<UnitCubeVertexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
-            NativeArray<UnitCubeIndexArray> indices = new NativeArray<UnitCubeIndexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
-            NativeArray<UnitCube> unitCubes = new NativeArray<UnitCube>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            
-            int idx = 0;
-            for (var x = 0; x < resolution; x++)
-            {
-                for (var y = 0; y < resolution; y++)
-                {
-                    for (var z = 0; z < resolution; z++, idx++)
-                    {
-                        var intPosition = new Vector3Int(x, y, z);
-                        var position = new Vector3(x, y, z);
-                        unitCubePositions[idx] = intPosition;
+            unitCubePositions = new NativeArray<Vector3Int>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            vertexVolumeData = new NativeArray<VertexVolumeData>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            vertices = new NativeArray<UnitCubeVertexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            indices = new NativeArray<UnitCubeIndexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            unitCubes = new NativeArray<UnitCube>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
-                        float readField(Vector3 pos)
-                        {
-                            var value = field.GetPixelBilinear(pos.x, pos.y, pos.z, 0).r;
-                            return value;
-                        }
+            verticesVector3 = new NativeArray<Vector3>(voxelCount * 12, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            indicesInt = new NativeArray<int>(voxelCount * 15, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
-                        var data = new float[8];
-                        data[0] = readField((position + new Vector3(0, 0, 0)) / resolution);
-                        data[1] = readField((position + new Vector3(1, 0, 0)) / resolution);
-                        data[2] = readField((position + new Vector3(1, 0, 1)) / resolution);
-                        data[3] = readField((position + new Vector3(0, 0, 1)) / resolution);
-                        data[4] = readField((position + new Vector3(0, 1, 0)) / resolution);
-                        data[5] = readField((position + new Vector3(1, 1, 0)) / resolution);
-                        data[6] = readField((position + new Vector3(1, 1, 1)) / resolution);
-                        data[7] = readField((position + new Vector3(0, 1, 1)) / resolution);
-                        
-                        var vertexVolume = new VertexVolumeData(data);
-                        vertexVolumeData[idx] = vertexVolume;
-                    }
-                }
-            }
-            for(int i = 0; i < voxelCount; i++)
+            SetParameters((address, idx) => {
+
+                var intPosition = address;
+                unitCubePositions[idx] = intPosition;
+                return true; });
+
+            for (int i = 0; i < voxelCount; i++)
             {
                 unitCubes[i] = new UnitCube(
                     i,
@@ -80,22 +72,85 @@ namespace DualContouring
                     new Vector3Int(resolution, resolution, resolution)
                 );
             }
-            var mcJob = new MCJob
+
+            mcJob = new MCJob
             {
-                unitCubeCoordinate = unitCubePositions,
-                voxelSize = new Vector3(1, 1, 1),
-                voxelResolution = new Vector3Int(resolution, resolution, resolution),
                 vertexVolumeData = vertexVolumeData,
                 threshold = 0.5f,
                 unitCubes = unitCubes,
                 vertices = vertices,
                 indices = indices,
             };
+        }
+
+        public void Dispose()
+        {
+            vertexVolumeData.Dispose();
+            unitCubePositions.Dispose();
+
+            unitCubes.Dispose();
+            vertices.Dispose();
+            indices.Dispose();
+            verticesVector3.Dispose();
+            indicesInt.Dispose();
+        }
+
+        void SetParameters(System.Func<Vector3Int, int, bool> func)
+        {
+            int idx = 0;
+            for (var x = 0; x < resolution; x++)
+            {
+                for (var y = 0; y < resolution; y++)
+                {
+                    for (var z = 0; z < resolution; z++, idx++)
+                    {
+                        func(new Vector3Int(x, y, z), idx);
+                    }
+                }
+            }
+        }
+
+        public void Execute(Texture3D field, Material material) 
+        {
+            meshRenderer.material = material;
+
+            //reflesh parameter
+            bool setParameters(Vector3Int address, int index)
+            {
+                var position = new Vector3(address.x, address.y, address.z);
+
+                float readField(Vector3 pos)
+                {
+                    var value = field.GetPixelBilinear(pos.x, pos.y, pos.z, 0).r;
+                    return value;
+                }
+
+                var data = new float[8];
+                data[0] = readField((position + new Vector3(0, 0, 0)) / resolution);
+                data[1] = readField((position + new Vector3(1, 0, 0)) / resolution);
+                data[2] = readField((position + new Vector3(1, 0, 1)) / resolution);
+                data[3] = readField((position + new Vector3(0, 0, 1)) / resolution);
+                data[4] = readField((position + new Vector3(0, 1, 0)) / resolution);
+                data[5] = readField((position + new Vector3(1, 1, 0)) / resolution);
+                data[6] = readField((position + new Vector3(1, 1, 1)) / resolution);
+                data[7] = readField((position + new Vector3(0, 1, 1)) / resolution);
+
+                var vertexVolume = new VertexVolumeData(data);
+                vertexVolumeData[index] = vertexVolume;
+
+                return true;
+            }
+            SetParameters(setParameters);
+
+
+            //job
             jobHandle = mcJob.Schedule(voxelCount, voxelCount);
 
             jobHandle.Complete();
 
-            var verticesVector3 = new NativeArray<Vector3>(voxelCount * 12, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            //integrate vertex/index data
+            //TODO: ï¿óÒâªÇµÇΩÇ¢
+            //jobì‡Ç≈ÇÕNativeArrayÇÕé©ï™ÇÃindexÇµÇ©ì«Ç›èëÇ´Ç≈Ç´Ç»Ç¢
             for(var i = 0; i < vertices.Length; i++)
             {
                 for(var j = 0; j < 12; j++)
@@ -104,7 +159,6 @@ namespace DualContouring
                 }
             }
 
-            var indicesInt = new NativeArray<int>(voxelCount * 15, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             for(var i = 0; i < indices.Length; i++)
             {
                 for(var j = 0; j < 15; j++)
@@ -116,14 +170,6 @@ namespace DualContouring
             mesh.SetVertices(verticesVector3);
             mesh.SetIndices(indicesInt, MeshTopology.Triangles, 0);
             meshFilter.mesh = mesh;
-            vertexVolumeData.Dispose();
-            unitCubePositions.Dispose();
-
-            unitCubes.Dispose();
-            vertices.Dispose();
-            indices.Dispose();
-            verticesVector3.Dispose();
-            indicesInt.Dispose();
         }
     }
     
@@ -336,12 +382,6 @@ namespace DualContouring
 
     public struct MCJob : IJobParallelFor
     {
-        [ReadOnly]
-        public NativeArray<Vector3Int> unitCubeCoordinate;
-        [ReadOnly]
-        public Vector3 voxelSize;
-        [ReadOnly]
-        public Vector3Int voxelResolution;
         [ReadOnly]
         public NativeArray<VertexVolumeData> vertexVolumeData;
         [ReadOnly]
