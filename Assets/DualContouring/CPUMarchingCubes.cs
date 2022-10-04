@@ -37,6 +37,7 @@ namespace DualContouring
             NativeArray<VertexVolumeData> vertexVolumeData = new NativeArray<VertexVolumeData>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             NativeArray<UnitCubeVertexArray> vertices = new NativeArray<UnitCubeVertexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
             NativeArray<UnitCubeIndexArray> indices = new NativeArray<UnitCubeIndexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            NativeArray<UnitCube> unitCubes = new NativeArray<UnitCube>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             
             int idx = 0;
             for (var x = 0; x < resolution; x++)
@@ -70,6 +71,15 @@ namespace DualContouring
                     }
                 }
             }
+            for(int i = 0; i < voxelCount; i++)
+            {
+                unitCubes[i] = new UnitCube(
+                    i,
+                    unitCubePositions[i],
+                    new Vector3(1, 1, 1),
+                    new Vector3Int(resolution, resolution, resolution)
+                );
+            }
             var mcJob = new MCJob
             {
                 unitCubeCoordinate = unitCubePositions,
@@ -77,6 +87,7 @@ namespace DualContouring
                 voxelResolution = new Vector3Int(resolution, resolution, resolution),
                 vertexVolumeData = vertexVolumeData,
                 threshold = 0.5f,
+                unitCubes = unitCubes,
                 vertices = vertices,
                 indices = indices,
             };
@@ -108,6 +119,7 @@ namespace DualContouring
             vertexVolumeData.Dispose();
             unitCubePositions.Dispose();
 
+            unitCubes.Dispose();
             vertices.Dispose();
             indices.Dispose();
             verticesVector3.Dispose();
@@ -334,21 +346,15 @@ namespace DualContouring
         public NativeArray<VertexVolumeData> vertexVolumeData;
         [ReadOnly]
         public float threshold;
-        
+
+        public NativeArray<UnitCube> unitCubes;
         public NativeArray<UnitCubeVertexArray> vertices;
         public NativeArray<UnitCubeIndexArray> indices;
         
         public void Execute(int index)
         {
-            var uc = new UnitCube(
-                    index,
-                    unitCubeCoordinate[index],
-                    voxelSize,
-                    voxelResolution,
-                    threshold,
-                    vertexVolumeData[index]
-                );
-            uc.GenerateMesh();
+            var uc = unitCubes[index];
+            uc.GenerateMesh(threshold, vertexVolumeData[index]);
             vertices[index] = uc.vertices;
             indices[index] = uc.indices;
         }

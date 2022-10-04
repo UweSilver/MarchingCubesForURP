@@ -25,13 +25,14 @@ namespace DualContouring
 
         int unitCubeIdx;
 
-        public UnitCube(int index, Vector3Int coordinate, Vector3 voxelSize, Vector3Int voxelResolution, float threshold, VertexVolumeData vertexVolumeData)
+        public UnitCube(int index, Vector3Int coordinate, Vector3 voxelSize, Vector3Int voxelResolution)
         {
             this.position = new Vector3(coordinate.x * voxelSize.x, coordinate.y * voxelSize.y, coordinate.z * voxelSize.z);
             this.voxelSize = voxelSize;
             this.voxelResolution = voxelResolution;
-            this.threshold = threshold;
-            this.vertexVolumeData = vertexVolumeData;
+
+            this.threshold = 0f;
+            this.vertexVolumeData = new();
 
             this.unitCubeIdx = index;
 
@@ -39,8 +40,11 @@ namespace DualContouring
             indices = new();
         }
 
-        public void GenerateMesh()
+        public void GenerateMesh( float threshold, VertexVolumeData vertexVolumeData)
         {
+            this.threshold = threshold;
+            this.vertexVolumeData = vertexVolumeData;
+
             var triangles = refLUT(vertexVolumeData);
             var vert = new UnitCubeVertexArray();
             for (int i = 0; i < 12; i++)
