@@ -17,6 +17,7 @@ namespace DualContouring
 
 
             field = new Texture3D(resolution, resolution, resolution, TextureFormat.RGBA32, false);
+            field.wrapMode = TextureWrapMode.Mirror;
 
             int idx = 0;
             for(var x = 0; x < resolution; x++)
