@@ -42,6 +42,9 @@ namespace DualContouring
 
         public void GenerateMesh( float threshold, VertexVolumeData vertexVolumeData)
         {
+            if (!this.vertexVolumeData.HasDiff(vertexVolumeData))
+                return;
+
             this.threshold = threshold;
             this.vertexVolumeData = vertexVolumeData;
 
