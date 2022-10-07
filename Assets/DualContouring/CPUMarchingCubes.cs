@@ -205,6 +205,14 @@ namespace DualContouring
                 };
             }
         }
+
+        public bool HasDiff(VertexVolumeData newData)
+        {
+            for (int i = 0; i < 8; i++)
+                if (this[i] != newData[i]) return true;
+
+            return false;
+        }
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -387,7 +395,10 @@ namespace DualContouring
         [ReadOnly]
         public float threshold;
 
+        [ReadOnly]
         public NativeArray<UnitCube> unitCubes;
+        //このNativeArrayを[ReadOnly]にすることで、このJobのindexと異なる要素にアクセスできるようになる
+
         public NativeArray<UnitCubeVertexArray> vertices;
         public NativeArray<UnitCubeIndexArray> indices;
         
