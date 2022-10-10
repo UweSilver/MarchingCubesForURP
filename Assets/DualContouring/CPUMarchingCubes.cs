@@ -54,8 +54,8 @@ namespace DualContouring
             indices = new NativeArray<UnitCubeIndexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             unitCubes = new NativeArray<UnitCube>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
-            verticesVector3 = new NativeArray<Vector3>(voxelCount * 12, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            indicesInt = new NativeArray<int>(voxelCount * 15, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            //verticesVector3 = new NativeArray<Vector3>(voxelCount * 12, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            //indicesInt = new NativeArray<int>(voxelCount * 15, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
             SetParameters((address, idx) => {
 
@@ -91,8 +91,8 @@ namespace DualContouring
             unitCubes.Dispose();
             vertices.Dispose();
             indices.Dispose();
-            verticesVector3.Dispose();
-            indicesInt.Dispose();
+            //verticesVector3.Dispose();
+            //indicesInt.Dispose();
         }
 
         void SetParameters(System.Func<Vector3Int, int, bool> func)
@@ -148,26 +148,10 @@ namespace DualContouring
 
             jobHandle.Complete();
 
-            //integrate vertex/index data
-            //TODO: ï¿óÒâªÇµÇΩÇ¢
-            //jobì‡Ç≈ÇÕNativeArrayÇÕé©ï™ÇÃindexÇµÇ©ì«Ç›èëÇ´Ç≈Ç´Ç»Ç¢
-            for(var i = 0; i < vertices.Length; i++)
-            {
-                for(var j = 0; j < 12; j++)
-                {
-                    verticesVector3[i * 12 + j] = vertices[i][j];
-                }
-            }
-
-            for(var i = 0; i < indices.Length; i++)
-            {
-                for(var j = 0; j < 15; j++)
-                {
-                    indicesInt[i * 15 + j] = indices[i][j];
-                }
-            }
-
+            var verticesVector3 = vertices.Reinterpret<Vector3>(System.Runtime.InteropServices.Marshal.SizeOf(new UnitCubeVertexArray()));
             mesh.SetVertices(verticesVector3);
+
+            var indicesInt = indices.Reinterpret<int>(System.Runtime.InteropServices.Marshal.SizeOf(new UnitCubeIndexArray()));
             mesh.SetIndices(indicesInt, MeshTopology.Triangles, 0);
             meshFilter.mesh = mesh;
         }
