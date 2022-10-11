@@ -404,6 +404,8 @@ namespace DualContouring
             indices[index] = uc.indices;
         }
 
+        //triTable‚ğQÆ‚·‚é‚½‚ß‚ÌŠÖ”
+        //NativeArray‚Íjob“à‚É‚Í‚¿‚ß‚é‚ªAUnitCube“à‚É‚Í‚¿‚ß‚È‚¢
         UnitCubeIndexArray getTriangles(int index, int unitCubeIndex)
         {
             UnitCubeIndexArray triangles = new();
