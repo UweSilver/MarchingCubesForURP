@@ -14,7 +14,6 @@ namespace DualContouring
         public IVolumeGenerater VolumeGenerater = new VoxelMapToVolume();
         public void Generate()
         {
-            //vg = new SimpleVolumeGenerater();
             VolumeGenerater.Generate(GetComponent<ContourGenerater>());
         }
     }

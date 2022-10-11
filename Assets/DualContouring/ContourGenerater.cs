@@ -12,7 +12,7 @@ namespace DualContouring
     public class ContourGenerater : MonoBehaviour
     {
         public Texture3D Field;
-        CPUMarchingCubes cpuMC;
+        public CPUMarchingCubes cpuMC;
 
         [SerializeField]
         Material mat;

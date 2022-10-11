@@ -13,10 +13,12 @@ namespace DualContouring
         GameObject ContourGeneraterObj;
 
         IVolumeGenerater volumeGenerater;
+        ContourGenerater contourGenerater;
 
         void Start()
         {
             volumeGenerater = ContourGeneraterObj.GetComponent<FieldGenerator>().VolumeGenerater;
+            contourGenerater = ContourGeneraterObj.GetComponent<ContourGenerater>();
 
             //map init
             map = new bool[size.x, size.y, size.z];
@@ -32,6 +34,8 @@ namespace DualContouring
             }
 
             addBox(new Vector3Int(0, 0, 0));
+
+            (volumeGenerater as VoxelMapToVolume).voxelMap = this.map;
         }
 
         void addBox(Vector3 pos)
@@ -53,7 +57,8 @@ namespace DualContouring
             Debug.Log(raycastHit.transform.position + " : " + raycastHit.normal);
             addBox(raycastHit.transform.localPosition + raycastHit.normal);
 
-            (volumeGenerater as VoxelMapToVolume).voxelMap = this.map;
+            volumeGenerater.Generate(contourGenerater);
+            contourGenerater.Execute();
         }
     }
 }

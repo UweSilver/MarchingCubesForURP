@@ -14,7 +14,6 @@ namespace DualContouring
     {
         int resolution = 64;
 
-
         private JobHandle jobHandle;
         
         GameObject root = new();
@@ -31,6 +30,10 @@ namespace DualContouring
         NativeArray<UnitCube> unitCubes;
 
         NativeArray<UnitCubeIndexArray> MCLUT;
+
+        //äOïîÇ≈èâä˙âª disposeÇÕÇ±Ç¡Çø
+        public NativeArray<float> field;
+        public int fieldRes;
 
         MCJob mcJob;
 
@@ -82,6 +85,8 @@ namespace DualContouring
                 vertices = vertices,
                 indices = indices,
                 triTable = MCLUT,
+                arrayField = field,
+                fieldResolution = fieldRes,
             };
         }
 
@@ -95,6 +100,8 @@ namespace DualContouring
             indices.Dispose();
 
             MCLUT.Dispose();
+
+            field.Dispose();
         }
 
         void SetParameters(System.Func<Vector3Int, int, bool> func)
@@ -114,6 +121,10 @@ namespace DualContouring
 
         public void Execute(Texture3D field, Material material) 
         {
+            var timer = new System.Diagnostics.Stopwatch();
+            timer.Reset();
+            timer.Start();
+
             meshRenderer.material = material;
 
             //reflesh parameter
@@ -144,11 +155,18 @@ namespace DualContouring
             }
             SetParameters(setParameters);
 
+            timer.Stop();
+            Debug.Log("parameters : " + timer.ElapsedMilliseconds);
+            timer.Restart();
 
             //job
             jobHandle = mcJob.Schedule(voxelCount, voxelCount);
 
             jobHandle.Complete();
+
+            timer.Stop();
+            Debug.Log("jobs : " + timer.ElapsedMilliseconds);
+            timer.Restart();
 
             var verticesVector3 = vertices.Reinterpret<Vector3>(System.Runtime.InteropServices.Marshal.SizeOf(new UnitCubeVertexArray()));
             mesh.SetVertices(verticesVector3);
@@ -156,6 +174,42 @@ namespace DualContouring
             var indicesInt = indices.Reinterpret<int>(System.Runtime.InteropServices.Marshal.SizeOf(new UnitCubeIndexArray()));
             mesh.SetIndices(indicesInt, MeshTopology.Triangles, 0);
             meshFilter.mesh = mesh;
+
+            timer.Stop();
+            Debug.Log("mesh : " + timer.ElapsedMilliseconds);
+        }
+
+        public void Execute(Material material)
+        {
+            var timer = new System.Diagnostics.Stopwatch();
+            timer.Reset();
+            timer.Start();
+
+            meshRenderer.material = material;
+
+
+            timer.Stop();
+            Debug.Log("parameters : " + timer.ElapsedMilliseconds);
+            timer.Restart();
+
+            //job
+            jobHandle = mcJob.Schedule(voxelCount, voxelCount);
+
+            jobHandle.Complete();
+
+            timer.Stop();
+            Debug.Log("jobs : " + timer.ElapsedMilliseconds);
+            timer.Restart();
+
+            var verticesVector3 = vertices.Reinterpret<Vector3>(System.Runtime.InteropServices.Marshal.SizeOf(new UnitCubeVertexArray()));
+            mesh.SetVertices(verticesVector3);
+
+            var indicesInt = indices.Reinterpret<int>(System.Runtime.InteropServices.Marshal.SizeOf(new UnitCubeIndexArray()));
+            mesh.SetIndices(indicesInt, MeshTopology.Triangles, 0);
+            meshFilter.mesh = mesh;
+
+            timer.Stop();
+            Debug.Log("mesh : " + timer.ElapsedMilliseconds);
         }
     }
     
@@ -389,11 +443,18 @@ namespace DualContouring
         [ReadOnly]
         public NativeArray<UnitCubeIndexArray> triTable;
 
+        [ReadOnly]
+        public NativeArray<float> arrayField;
+        [ReadOnly]
+        public int fieldResolution;
+
         public NativeArray<UnitCubeVertexArray> vertices;
         public NativeArray<UnitCubeIndexArray> indices;
         
         public void Execute(int index)
         {
+            VertexVolumeData vertVolData;
+
             var uc = unitCubes[index];
             var lutIdx = uc.GetLUTIdx(threshold, vertexVolumeData[index]);
             if (lutIdx < 0) 
