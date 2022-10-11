@@ -28,7 +28,6 @@ namespace DualContouring
                     {
                         var pos = new Vector3Int(x, y, z);
                         var value = (insideCubes(pos)) ? 1 : 0;
-                        //var value = (float)y / resolution;
                         field.SetPixel(x, y, z, new Color(value, 0, 0, 0));
                     }
                 }
