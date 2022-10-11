@@ -30,8 +30,7 @@ namespace DualContouring
         NativeArray<UnitCubeIndexArray> indices;
         NativeArray<UnitCube> unitCubes;
 
-        NativeArray<Vector3> verticesVector3;
-        NativeArray<int> indicesInt;
+        NativeArray<UnitCubeIndexArray> MCLUT;
 
         MCJob mcJob;
 
@@ -49,13 +48,15 @@ namespace DualContouring
             voxelCount = Mathf.FloorToInt(Mathf.Pow(resolution, 3));
 
             unitCubePositions = new NativeArray<Vector3Int>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            vertexVolumeData = new NativeArray<VertexVolumeData>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            vertices = new NativeArray<UnitCubeVertexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            indices = new NativeArray<UnitCubeIndexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            vertexVolumeData = new NativeArray<VertexVolumeData>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            vertices = new NativeArray<UnitCubeVertexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+            indices = new NativeArray<UnitCubeIndexArray>(voxelCount, Allocator.Persistent, NativeArrayOptions.ClearMemory);
             unitCubes = new NativeArray<UnitCube>(voxelCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
-            //verticesVector3 = new NativeArray<Vector3>(voxelCount * 12, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-            //indicesInt = new NativeArray<int>(voxelCount * 15, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            MCLUT = new NativeArray<UnitCubeIndexArray>(256, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+
+            for (int i = 0; i < MCLUT.Length; i++)
+                MCLUT[i] = UnitCubeUtils.triTableIndexArray[i];
 
             SetParameters((address, idx) => {
 
@@ -80,6 +81,7 @@ namespace DualContouring
                 unitCubes = unitCubes,
                 vertices = vertices,
                 indices = indices,
+                triTable = MCLUT,
             };
         }
 
@@ -91,8 +93,8 @@ namespace DualContouring
             unitCubes.Dispose();
             vertices.Dispose();
             indices.Dispose();
-            //verticesVector3.Dispose();
-            //indicesInt.Dispose();
+
+            MCLUT.Dispose();
         }
 
         void SetParameters(System.Func<Vector3Int, int, bool> func)
@@ -372,6 +374,7 @@ namespace DualContouring
         }
     }
 
+    [BurstCompile]
     public struct MCJob : IJobParallelFor
     {
         [ReadOnly]
@@ -383,15 +386,37 @@ namespace DualContouring
         public NativeArray<UnitCube> unitCubes;
         //このNativeArrayを[ReadOnly]にすることで、このJobのindexと異なる要素にアクセスできるようになる
 
+        [ReadOnly]
+        public NativeArray<UnitCubeIndexArray> triTable;
+
         public NativeArray<UnitCubeVertexArray> vertices;
         public NativeArray<UnitCubeIndexArray> indices;
         
         public void Execute(int index)
         {
             var uc = unitCubes[index];
-            uc.GenerateMesh(threshold, vertexVolumeData[index]);
+            var lutIdx = uc.GetLUTIdx(threshold, vertexVolumeData[index]);
+            if (lutIdx < 0) 
+                return;
+            var triangles = getTriangles(lutIdx, index);
+            uc.GenerateMesh(triangles);
             vertices[index] = uc.vertices;
             indices[index] = uc.indices;
+        }
+
+        UnitCubeIndexArray getTriangles(int index, int unitCubeIndex)
+        {
+            UnitCubeIndexArray triangles = new();
+            for (int i = 0; i < 15; i++)
+            {
+                var rawVal = triTable[index][i];
+                if (rawVal != -1)
+                {
+                    triangles[i] = (rawVal + unitCubeIndex * 12);
+                }
+                else triangles[i] = 0;
+            }
+            return triangles;
         }
     }
 }
