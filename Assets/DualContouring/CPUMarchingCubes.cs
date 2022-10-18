@@ -454,7 +454,7 @@ namespace DualContouring
         }
     }
 
-    //[BurstCompile]
+    [BurstCompile]
     public struct MCJob : IJobParallelFor
     {
         [ReadOnly]
