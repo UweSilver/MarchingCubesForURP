@@ -12,7 +12,7 @@ namespace DualContouring
 {
     public class CPUMarchingCubes : IContourGenerater, System.IDisposable
     {
-        int resolution = 64;
+        int resolution = 128;
 
         private JobHandle jobHandle;
         
@@ -162,7 +162,7 @@ namespace DualContouring
             timer.Restart();
 
             //job
-            jobHandle = mcJob.Schedule(voxelCount, voxelCount);
+            jobHandle = mcJob.Schedule(voxelCount, 1);
 
             jobHandle.Complete();
 
