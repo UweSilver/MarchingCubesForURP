@@ -31,9 +31,7 @@ namespace DualContouring
 
         NativeArray<UnitCubeIndexArray> MCLUT;
 
-        //外部で初期化 disposeはこっち
-        public NativeArray<float> field;
-        public int fieldRes;
+        public NativeArray<Color32> field;
 
         MCJob mcJob;
 
@@ -82,11 +80,10 @@ namespace DualContouring
                 vertexVolumeData = vertexVolumeData,
                 threshold = 0.5f,
                 unitCubes = unitCubes,
+                unitCubesResolution = resolution,
                 vertices = vertices,
                 indices = indices,
                 triTable = MCLUT,
-                arrayField = field,
-                fieldResolution = fieldRes,
             };
         }
 
@@ -101,7 +98,7 @@ namespace DualContouring
 
             MCLUT.Dispose();
 
-            field.Dispose();
+            //field.Dispose();
         }
 
         void SetParameters(System.Func<Vector3Int, int, bool> func)
@@ -124,6 +121,8 @@ namespace DualContouring
             var timer = new System.Diagnostics.Stopwatch();
             timer.Reset();
             timer.Start();
+
+            this.field = field.GetPixelData<Color32>(0);
 
             meshRenderer.material = material;
 
@@ -153,7 +152,10 @@ namespace DualContouring
 
                 return true;
             }
-            SetParameters(setParameters);
+            //SetParameters(setParameters);
+
+            mcJob.field = field.GetPixelData<Color32>(0);
+            mcJob.fieldResolution = field.height;
 
             timer.Stop();
             Debug.Log("parameters : " + timer.ElapsedMilliseconds);
@@ -213,6 +215,7 @@ namespace DualContouring
         }
     }
     
+    [StructLayout(LayoutKind.Sequential)]
     public struct VertexVolumeData
     {
         float v0, v1, v2, v3, v4, v5, v6, v7;
@@ -244,6 +247,21 @@ namespace DualContouring
                     _ => throw new System.Exception()
                 };
             }
+            set
+            {
+                switch (i)
+                {
+                    case 0: v0 = value; break;
+                    case 1: v1 = value; break;
+                    case 2: v2 = value; break;
+                    case 3: v3 = value; break;
+                    case 4: v4 = value; break;
+                    case 5: v5 = value; break;
+                    case 6: v6 = value; break;
+                    case 7: v7 = value; break;
+                    default: throw new System.Exception();
+                }
+            }
         }
 
         public bool HasDiff(VertexVolumeData newData)
@@ -252,6 +270,14 @@ namespace DualContouring
                 if (this[i] != newData[i]) return true;
 
             return false;
+        }
+
+        public override string ToString()
+        {
+            var str = "";
+            for (int i = 0; i < 8; i++)
+                str += " : " + this[i];
+            return str;
         }
     }
 
@@ -428,7 +454,7 @@ namespace DualContouring
         }
     }
 
-    [BurstCompile]
+    //[BurstCompile]
     public struct MCJob : IJobParallelFor
     {
         [ReadOnly]
@@ -439,24 +465,30 @@ namespace DualContouring
         [ReadOnly]
         public NativeArray<UnitCube> unitCubes;
         //このNativeArrayを[ReadOnly]にすることで、このJobのindexと異なる要素にアクセスできるようになる
+        [ReadOnly]
+        public int unitCubesResolution;
 
         [ReadOnly]
         public NativeArray<UnitCubeIndexArray> triTable;
 
         [ReadOnly]
-        public NativeArray<float> arrayField;
+        public NativeArray<Color32> field;
         [ReadOnly]
         public int fieldResolution;
-
+        
         public NativeArray<UnitCubeVertexArray> vertices;
         public NativeArray<UnitCubeIndexArray> indices;
         
         public void Execute(int index)
         {
-            VertexVolumeData vertVolData;
-
             var uc = unitCubes[index];
-            var lutIdx = uc.GetLUTIdx(threshold, vertexVolumeData[index]);
+            
+            VertexVolumeData vertVolData = readVolData(uc.position);
+            //if (uc.position.magnitude < 5f)
+                //Debug.Log(vertVolData);
+
+            //var lutIdx = uc.GetLUTIdx(threshold, vertexVolumeData[index]);
+            var lutIdx = uc.GetLUTIdx(threshold, vertVolData);
             if (lutIdx < 0) 
                 return;
             var triangles = getTriangles(lutIdx, index);
@@ -480,6 +512,45 @@ namespace DualContouring
                 else triangles[i] = 0;
             }
             return triangles;
+        }
+
+        VertexVolumeData readVolData(Vector3 position)
+        {
+            int Vec3ItoIdx(Vector3Int pos, int resolution)
+            {
+                if (pos.x >= resolution - 1) pos.x = resolution - 1;
+                if (pos.y >= resolution - 1) pos.y = resolution - 1;
+                if (pos.z >= resolution - 1) pos.z = resolution - 1;
+
+                return pos.z * (resolution * resolution) + pos.y * resolution + pos.x;
+            }
+
+            float readField(Vector3 uvw, int fieldResolution, NativeArray<Color32> field)
+            {
+                var min = new Vector3Int(Mathf.FloorToInt(uvw.x * fieldResolution), Mathf.FloorToInt(uvw.y * fieldResolution), Mathf.FloorToInt(uvw.z * fieldResolution));
+
+                float value = 0;
+                for (int du = 0; du < 2; du++)
+                    for (int dv = 0; dv < 2; dv++)
+                        for (int dw = 0; dw < 2; dw++)
+                            value += field[Vec3ItoIdx(min + new Vector3Int(du, dv, dw), fieldResolution)].r;
+
+                value /= 2 * 2 * 2;
+
+                return value;
+            }
+
+            var data = new VertexVolumeData();
+            data[0] = readField((position + new Vector3(0, 0, 0)) / unitCubesResolution, fieldResolution, field);
+            data[1] = readField((position + new Vector3(1, 0, 0)) / unitCubesResolution, fieldResolution, field);
+            data[2] = readField((position + new Vector3(1, 0, 1)) / unitCubesResolution, fieldResolution, field);
+            data[3] = readField((position + new Vector3(0, 0, 1)) / unitCubesResolution, fieldResolution, field);
+            data[4] = readField((position + new Vector3(0, 1, 0)) / unitCubesResolution, fieldResolution, field);
+            data[5] = readField((position + new Vector3(1, 1, 0)) / unitCubesResolution, fieldResolution, field);
+            data[6] = readField((position + new Vector3(1, 1, 1)) / unitCubesResolution, fieldResolution, field);
+            data[7] = readField((position + new Vector3(0, 1, 1)) / unitCubesResolution, fieldResolution, field);
+
+            return data;
         }
     }
 }

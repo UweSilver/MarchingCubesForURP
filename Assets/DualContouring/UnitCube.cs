@@ -10,7 +10,7 @@ namespace DualContouring
     public struct UnitCube
     {
         // = 8つの頂点のうち、最も原点(0, 0, 0)に近い頂点
-        Vector3 position;
+        public Vector3 position;
 
         Vector3 voxelSize;
 
